@@ -65,7 +65,7 @@ export function useAnonymizer({ save, notify }) {
   const loadFile = useCallback(async (file) => {
     if (!file) return;
     if (!/\.docx$/i.test(file.name)) {
-      notify('Aquí se abre Word (.docx); para PDF usa la pestaña Expediente PDF. Si tu archivo es .doc, ábrelo en Word y guárdalo como .docx.', true);
+      notify('Aquí se abre Word (.docx); para PDF (o un Word muy largo) usa la pestaña Expediente. Si tu archivo es .doc, ábrelo en Word y guárdalo como .docx.', true);
       return;
     }
     try {

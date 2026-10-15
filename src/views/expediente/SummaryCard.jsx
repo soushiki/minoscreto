@@ -1,4 +1,5 @@
 import FileButton from '../../components/FileButton.jsx';
+import { EXP_ACCEPT } from './accept.js';
 
 const fmt = (n) => n.toLocaleString('es-CO');
 
@@ -8,8 +9,11 @@ export default function SummaryCard({ vm }) {
   return (
     <section className="card xp-summary">
       <div className="xp-file">
-        <div className="doc"><strong>{vm.name}.pdf</strong><span>{fmt(vm.pageCount)} folios · {fmt(vm.paragraphCount)} párrafos</span></div>
-        <FileButton accept=".pdf,application/pdf" onFile={vm.loadFile} className="btn sm">Otro PDF</FileButton>
+        <div className="doc">
+          <strong>{vm.name}.{vm.kind === 'docx' ? 'docx' : 'pdf'}</strong>
+          <span>{vm.unit === 'parrafo' ? `${fmt(vm.paragraphCount)} párrafos (sin paginación guardada)` : `${fmt(vm.pageCount)} ${vm.units.many} · ${fmt(vm.paragraphCount)} párrafos`}</span>
+        </div>
+        <FileButton accept={EXP_ACCEPT} onFile={vm.loadFile} className="btn sm">Otro archivo</FileButton>
       </div>
 
       {vm.emptyPages.length > 0 && (

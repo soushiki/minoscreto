@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import JSZip from 'jszip';
 import App from '../src/App.jsx';
 
 beforeAll(() => {
@@ -28,14 +29,32 @@ describe('App', () => {
     cleanup();
   }, 20000);
 
-  it('abre el modo expediente y rechaza archivos que no son PDF', async () => {
+  it('abre el modo expediente y rechaza archivos que no son PDF ni Word', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'Expediente PDF' }));
-    expect(screen.getByRole('button', { name: 'Elegir PDF' })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Expediente' }));
+    expect(screen.getByRole('button', { name: 'Elegir archivo' })).toBeTruthy();
     const input = document.querySelector('input[type="file"][accept^=".pdf"]');
     fireEvent.change(input, { target: { files: [new File(['x'], 'nota.txt', { type: 'text/plain' })] } });
-    await waitFor(() => expect(document.querySelector('.toast').textContent).toMatch(/recibe PDF/));
+    await waitFor(() => expect(document.querySelector('.toast').textContent).toMatch(/recibe PDF o Word/));
     cleanup();
   });
+
+  it('anonimiza un Word en el modo expediente con marcas de página', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Expediente' }));
+    const zip = new JSZip();
+    const w = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+    const p = (t, pre = '') => `<w:p><w:r>${pre}<w:t>${t}</w:t></w:r></w:p>`;
+    zip.file('word/document.xml', `<w:document ${w}><w:body>${p('La señora Laura Patricia Ortega Jiménez demandó.')}${p('Laura Patricia Ortega Jiménez firmó.', '<w:lastRenderedPageBreak/>')}</w:body></w:document>`);
+    const file = new File([await zip.generateAsync({ type: 'uint8array' })], 'caso.docx');
+    fireEvent.change(document.querySelector('input[type="file"][accept^=".pdf"]'), { target: { files: [file] } });
+    await waitFor(() => expect(document.querySelector('.xp-pre')?.textContent || '').toContain('[PERSONA_1] firmó'), { timeout: 8000 });
+    const preview = document.querySelector('.xp-pre').textContent;
+    expect(preview).toContain('[Página 2]');
+    expect(preview).not.toContain('Ortega');
+    expect(document.querySelector('.xp-summary').textContent).toContain('caso.docx');
+    cleanup();
+  }, 15000);
 });

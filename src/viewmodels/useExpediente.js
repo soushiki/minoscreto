@@ -1,7 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useReducer, useRef } from 'react';
-import { buildDictionary, dictionaryToText, renameLabel } from '../model/index.js';
+import { buildDictionary, dictionaryToText, DocxError, renameLabel } from '../model/index.js';
 import {
-  buildPartsZip, buildSearchIndex, estimateTokens, formatPageRanges, renderParts, renderWhole, searchIndex, splitParts
+  buildPartsZip, buildSearchIndex, estimateTokens, formatPageRanges, renderParts, renderWhole, searchIndex, splitParts, unitOf
 } from '../model/expediente/index.js';
 import { expedienteReducer, initialExpediente } from './expedienteState.js';
 import { runExpedienteTask } from './expedienteWorker.js';
@@ -44,14 +44,15 @@ export function useExpediente({ save, notify }) {
 
   const parts = useMemo(() => (format === 'zip' && blocks.length ? splitParts(blocks, split) : []), [format, blocks, split]);
   const isSelection = scope === 'selection';
+  const unit = doc ? doc.unit : 'folio';
 
   const rendered = useMemo(() => {
     if (!blocks.length || !doc) return [];
     if (format === 'md' || parts.length <= 1) {
-      return [{ number: 1, first: blocks[0].page, last: blocks[blocks.length - 1].page, text: renderWhole({ name: state.name, blocks, emptyPages: doc.emptyPages, selection: isSelection }) }];
+      return [{ number: 1, first: blocks[0].page, last: blocks[blocks.length - 1].page, text: renderWhole({ name: state.name, blocks, emptyPages: doc.emptyPages, selection: isSelection, unit }) }];
     }
-    return renderParts({ blocks, parts, emptyPages: doc.emptyPages, selection: isSelection });
-  }, [blocks, parts, format, doc, state.name, isSelection]);
+    return renderParts({ blocks, parts, emptyPages: doc.emptyPages, selection: isSelection, unit });
+  }, [blocks, parts, format, doc, state.name, isSelection, unit]);
 
   const outputTokens = rendered.reduce((n, p) => n + estimateTokens(p.text.length), 0);
 
@@ -88,41 +89,64 @@ export function useExpediente({ save, notify }) {
     return { total: r.total, paragraphs: r.paragraphs.size, results, allKeys, allSelected: allKeys.length > 0 && allKeys.every((k) => selected.has(k)) };
   }, [index, deferredQuery, keys, texts, doc, selected]);
 
+  // PDF: se lee la capa de texto folio por folio. Word: párrafos y saltos de página guardados por Word.
+  const readSource = useCallback(async (file, signal) => {
+    const buffer = await file.arrayBuffer();
+    if (/\.docx$/i.test(file.name)) {
+      const { readDocxParagraphs } = await import('../model/expediente/docxSource.js');
+      const { paragraphs } = await readDocxParagraphs(buffer);
+      return { paragraphs };
+    }
+    const { readPdfPages } = await import('../model/expediente/pdfjs.js');
+    let lastPaint = 0;
+    const pages = await readPdfPages(new Uint8Array(buffer), {
+      signal,
+      onProgress: (done, total) => {
+        if (done === total || now() - lastPaint > 80) { lastPaint = now(); dispatch({ type: 'progress', done, total }); }
+      }
+    });
+    return { pages };
+  }, []);
+
   const loadFile = useCallback(async (file) => {
     if (!file) return;
-    if (!/\.pdf$/i.test(file.name)) { notify('El modo expediente recibe PDF. Para Word usa la pestaña Anonimizar.', true); return; }
+    if (!/\.(pdf|docx)$/i.test(file.name)) {
+      notify('El modo expediente recibe PDF o Word (.docx). Si tu archivo es .doc, ábrelo en Word y guárdalo como .docx.', true);
+      return;
+    }
     abort.current?.abort();
     const controller = new AbortController();
     abort.current = controller;
-    const name = file.name.replace(/\.pdf$/i, '');
-    dispatch({ type: 'reading', name });
+    const isWord = /\.docx$/i.test(file.name);
+    dispatch({ type: 'reading', name: file.name.replace(/\.(pdf|docx)$/i, ''), kind: isWord ? 'docx' : 'pdf' });
     try {
-      const { readPdfPages } = await import('../model/expediente/pdfjs.js');
       const t = now();
-      let lastPaint = 0;
-      const pages = await readPdfPages(new Uint8Array(await file.arrayBuffer()), {
-        signal: controller.signal,
-        onProgress: (done, total) => {
-          if (done === total || now() - lastPaint > 80) { lastPaint = now(); dispatch({ type: 'progress', done, total }); }
-        }
-      });
+      const source = await readSource(file, controller.signal);
       if (controller.signal.aborted) return;
       dispatch({ type: 'analyzing', readMs: now() - t });
-      const result = await runExpedienteTask('prepare', { pages });
+      const result = await runExpedienteTask('prepare', source);
       if (controller.signal.aborted) return;
+      if (!result.full.paragraphs.length) {
+        dispatch({ type: 'failed' });
+        notify(isWord ? 'Este Word no tiene texto para revisar.' : 'Este PDF no tiene texto: hazle OCR en Acrobat y vuelve a cargarlo.', true);
+        return;
+      }
       // Ids propios de esta pantalla: los del worker podrían repetirse con los que se crean aquí.
       const ids = result.entities.map((e, i) => ({ ...e, id: `x${i + 1}` }));
       dispatch({ type: 'loaded', docs: { full: result.full, reduced: result.reduced }, entities: ids, layoutMs: result.layoutMs, detectMs: result.detectMs });
-      const empty = result.full.emptyPages.length;
+      const { unit: u, pageCount: n, emptyPages } = result.full;
+      const names = unitOf(u);
+      const empty = emptyPages.length;
       notify(empty
-        ? `Expediente leído (${pages.length} folios). ${empty} ${empty === 1 ? 'folio no tiene' : 'folios no tienen'} texto: revisa el aviso.`
-        : `Expediente leído: ${pages.length} folios. Revisa los datos detectados y exporta.`);
+        ? `Expediente leído (${n} ${names.many}). ${empty} ${empty === 1 ? 'folio no tiene' : 'folios no tienen'} texto: revisa el aviso.`
+        : `Expediente leído: ${n} ${n === 1 ? names.one : names.many}. Revisa los datos detectados y exporta.`);
     } catch (error) {
       if (error?.code === 'aborted') return;
       dispatch({ type: 'failed' });
-      notify(error?.code ? error.message : `No se pudo leer el PDF: ${error?.message || 'error'}`, true);
+      if (isWord) notify(error instanceof DocxError ? 'Este archivo no parece un Word válido. ¿Está protegido con contraseña?' : 'No se pudo leer el Word.', true);
+      else notify(error?.code ? error.message : `No se pudo leer el PDF: ${error?.message || 'error'}`, true);
     }
-  }, [notify]);
+  }, [notify, readSource]);
 
   const cancel = useCallback(() => { abort.current?.abort(); dispatch({ type: 'failed' }); }, []);
 
@@ -192,11 +216,12 @@ export function useExpediente({ save, notify }) {
   }), []);
 
   const emptyPages = docs ? docs.full.emptyPages : [];
-  const pageCount = state.progress.total;
+  const pageCount = docs ? docs.full.pageCount : 0;
   const blocked = emptyPages.length > 0 && !state.ackEmpty;
 
   return {
-    status: state.status, progress: state.progress, name: state.name, loaded: state.status === 'ready', pageCount,
+    status: state.status, progress: state.progress, name: state.name, kind: state.kind, loaded: state.status === 'ready', pageCount,
+    unit, units: unitOf(unit),
     emptyPages, emptyRanges: formatPageRanges(emptyPages), blocked,
     reduce, tokens: docs ? { full: docs.full.tokens, reduced: docs.reduced.tokens } : null,
     removed: docs ? docs.reduced.removed : null, ocrFixes: docs ? docs.full.ocrFixes : 0,

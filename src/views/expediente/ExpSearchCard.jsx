@@ -29,7 +29,7 @@ export default function ExpSearchCard({ vm }) {
 
   return (
     <section className="card card-search xp-search">
-      <label className="lbl" htmlFor="xq">Buscar en todos los folios</label>
+      <label className="lbl" htmlFor="xq">Buscar en todo el expediente</label>
       <div className="qrow">
         <input id="xq" type="search" value={text} onChange={(e) => setText(e.target.value)} placeholder="Una palabra, nombre o número" autoComplete="off" spellCheck={false} />
       </div>
@@ -52,8 +52,8 @@ export default function ExpSearchCard({ vm }) {
           {search.results.map((r) => (
             <li key={r.pi} className={r.selected ? 'on' : ''}>
               <label>
-                <input type="checkbox" checked={r.selected} onChange={() => vm.actions.toggleSelected(r.key)} aria-label={`Marcar pasaje del folio ${r.page}`} />
-                <span className="xp-pg">Folio {r.page}</span>
+                <input type="checkbox" checked={r.selected} onChange={() => vm.actions.toggleSelected(r.key)} aria-label={`Marcar pasaje: ${vm.units.one} ${r.page}`} />
+                <span className="xp-pg">{vm.units.title} {r.page}</span>
                 <Snippet text={r.text} ranges={r.ranges} />
               </label>
             </li>

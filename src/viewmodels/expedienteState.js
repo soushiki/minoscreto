@@ -5,6 +5,7 @@ export const initialExpediente = {
   status: 'idle',
   progress: { done: 0, total: 0 },
   name: '',
+  kind: 'pdf',
   docs: null,
   entities: [],
   openCategories: new Set(['PERSONA', 'EMPRESA']),
@@ -34,7 +35,7 @@ export function expedienteReducer(state, action) {
   switch (action.type) {
     case 'reading':
       return { ...initialExpediente, openCategories: state.openCategories, split: state.split, format: state.format, reduce: state.reduce,
-        status: 'reading', name: action.name, progress: { done: 0, total: 0 } };
+        status: 'reading', name: action.name, kind: action.kind, progress: { done: 0, total: 0 } };
     case 'progress':
       return { ...state, progress: { done: action.done, total: action.total } };
     case 'analyzing':

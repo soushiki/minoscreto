@@ -31,9 +31,10 @@ export default function App() {
 
   const { loadFile: loadDocx } = anonymizer;
   const { loadFile: loadPdf } = expediente;
+  // En Expediente entra PDF o Word; en Anonimizar, un PDF se manda a Expediente.
   const onDrop = useCallback((file) => {
-    if (/\.pdf$/i.test(file.name)) { setScreen('expediente'); setSource('expediente'); loadPdf(file); } else loadDocx(file);
-  }, [loadDocx, loadPdf]);
+    if (screen === 'expediente' || /\.pdf$/i.test(file.name)) { setScreen('expediente'); setSource('expediente'); loadPdf(file); } else loadDocx(file);
+  }, [screen, loadDocx, loadPdf]);
   const dragging = useFileDrop(screen !== 'restore', onDrop);
 
   const current = source === 'expediente' && expediente.loaded

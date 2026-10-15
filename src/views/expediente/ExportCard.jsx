@@ -46,10 +46,10 @@ export default function ExportCard({ vm }) {
             <div className="xp-opt">
               <span className="lbl">Dividir</span>
               <Segmented label="Cómo dividir" value={split.mode} onChange={(mode) => setSplit({ mode })}
-                options={[{ value: 'tokens', label: 'Por tamaño' }, { value: 'pages', label: 'Por folios' }, { value: 'sections', label: 'Por títulos' }]} />
+                options={[{ value: 'tokens', label: 'Por tamaño' }, { value: 'pages', label: `Por ${vm.units.many}` }, { value: 'sections', label: 'Por títulos' }]} />
             </div>
             {split.mode === 'pages'
-              ? <NumberField label="Folios por parte" value={split.pagesPerPart} min={1} max={2000} step={10} onChange={(n) => setSplit({ pagesPerPart: n })} />
+              ? <NumberField label={`${vm.units.title}s por parte`} value={split.pagesPerPart} min={1} max={2000} step={10} onChange={(n) => setSplit({ pagesPerPart: n })} />
               : <NumberField label="Máximo por parte" value={split.maxTokens} min={2000} max={1000000} step={5000} suffix="tokens" onChange={(n) => setSplit({ maxTokens: n })} />}
             <NumberField label="Solapamiento" value={split.overlap} min={0} max={20} step={1} suffix="párrafos" onChange={(n) => setSplit({ overlap: n })} />
           </>
@@ -59,7 +59,7 @@ export default function ExportCard({ vm }) {
 
       {zip && multi && (
         <div className="xp-parts" role="table" aria-label="Partes">
-          <div role="row" className="xp-prow hd"><span role="columnheader">Parte</span><span role="columnheader">Folios</span><span role="columnheader">≈ tokens</span></div>
+          <div role="row" className="xp-prow hd"><span role="columnheader">Parte</span><span role="columnheader">{vm.units.title}s</span><span role="columnheader">≈ tokens</span></div>
           {rendered.map((p, k) => (
             <div role="row" className="xp-prow" key={p.number}>
               <span role="cell">{p.number} de {rendered.length}</span>

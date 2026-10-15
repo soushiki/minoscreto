@@ -1,14 +1,16 @@
 // Trabajo pesado del modo expediente. Corre en un Web Worker para no congelar la pantalla con 600 folios;
 // si el navegador no tiene workers (pruebas), se llama directamente.
 import { buildEntities } from '../model/index.js';
-import { buildDocument, anonymizeTexts, findOcrVariants, tidyEntities } from '../model/expediente/index.js';
+import { buildDocument, buildDocxDocument, anonymizeTexts, findOcrVariants, tidyEntities } from '../model/expediente/index.js';
 
 const now = () => performance.now();
 
-function prepare({ pages }) {
+/** Desde un PDF ({ pages }) o desde los párrafos de un Word ({ paragraphs }). */
+function prepare({ pages, paragraphs }) {
   let t = now();
-  const full = buildDocument(pages);
-  const reduced = buildDocument(pages, { reduce: true });
+  const build = pages ? (opts) => buildDocument(pages, opts) : (opts) => buildDocxDocument(paragraphs, opts);
+  const full = build();
+  const reduced = build({ reduce: true });
   const layoutMs = now() - t;
   t = now();
   // La versión completa ya une los párrafos que cruzan de folio y conserva encabezados: ve todos los datos.

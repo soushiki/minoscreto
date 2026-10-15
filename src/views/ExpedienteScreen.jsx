@@ -6,18 +6,21 @@ import OcrCard from './expediente/OcrCard.jsx';
 import ExportCard from './expediente/ExportCard.jsx';
 import PreviewCard from './expediente/PreviewCard.jsx';
 
-const PDF = '.pdf,application/pdf';
+import { EXP_ACCEPT } from './expediente/accept.js';
 
 function Intro({ vm }) {
   return (
     <section className="card xp-intro">
-      <h2>Expediente en PDF</h2>
+      <h2>Expediente en PDF o Word</h2>
       <p className="sub">
-        Para expedientes largos (hasta cientos de folios) ya pasados por OCR en Adobe Acrobat. Minoscreto lee el texto de cada folio,
+        Para expedientes largos (hasta cientos de folios): un PDF ya pasado por OCR en Adobe Acrobat o un Word (.docx). Minoscreto lee el texto,
         lo anonimiza aquí mismo y lo exporta como texto listo para subir a la IA: en un solo archivo o dividido en partes con las mismas etiquetas.
       </p>
-      <DropZone text="Arrastra el PDF aquí o" buttonLabel="Elegir PDF" accept={PDF} onFile={vm.loadFile} />
-      <p className="muted mt">El documento no sale de este navegador. Si un folio es una imagen sin texto, te avisaremos para que le hagas OCR primero.</p>
+      <DropZone text="Arrastra el PDF o Word aquí o" buttonLabel="Elegir archivo" accept={EXP_ACCEPT} onFile={vm.loadFile} />
+      <p className="muted mt">
+        El documento no sale de este navegador. Si un folio del PDF es una imagen sin texto, te avisaremos para que le hagas OCR primero.
+        En un Word, las páginas salen de la última paginación que guardó Word; si no la tiene, el texto se ubica por número de párrafo.
+      </p>
     </section>
   );
 }
@@ -29,7 +32,7 @@ function Progress({ vm }) {
   return (
     <section className="card xp-progress" aria-live="polite">
       <h2>{vm.name}</h2>
-      <p className="sub">{reading ? (total ? `Leyendo folio ${done} de ${total}…` : 'Abriendo el PDF…') : 'Buscando datos personales en todo el expediente…'}</p>
+      <p className="sub">{reading ? (total ? `Leyendo folio ${done} de ${total}…` : `Abriendo el ${vm.kind === 'docx' ? 'Word' : 'PDF'}…`) : 'Buscando datos personales en todo el expediente…'}</p>
       <div className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><span style={{ width: `${pct}%` }} /></div>
       <div className="row-btns"><button type="button" className="btn" onClick={vm.cancel}>Cancelar</button></div>
     </section>

@@ -4,8 +4,9 @@ import { buildEntities, buildDictionary } from '../src/model/index.js';
 import {
   itemsToLines, linesToParagraphs, isHeading, reducePages, isJunk, isPageNumber, buildDocument, formatPageRanges,
   splitParts, renderParts, renderWhole, renderBlocks, buildPartsZip, anonymizeTexts, buildSearchIndex, searchIndex,
-  findOcrVariants, acceptOcrVariant, tidyEntities, fixDigitConfusions, PART_HEADER_TOKENS
+  findOcrVariants, acceptOcrVariant, tidyEntities, fixDigitConfusions, PART_HEADER_TOKENS, buildDocxDocument
 } from '../src/model/expediente/index.js';
+import { readDocxParagraphs } from '../src/model/expediente/docxSource.js';
 
 const item = (str, x, y, { w = str.length * 5, h = 10, eol = false } = {}) => ({ str, transform: [h, 0, 0, h, x, y], width: w, height: h, hasEOL: eol });
 const line = (text, y, { x = 72, right = 520 } = {}) => ({ text, x, y, h: 10, right });
@@ -233,5 +234,62 @@ describe('búsqueda en el expediente', () => {
     expect(r.total).toBe(3);
     expect(r.hits).toEqual([{ pi: 0, start: 3, end: 8 }, { pi: 2, start: 0, end: 5 }]);
     expect([...r.paragraphs]).toEqual([0, 2]);
+  });
+});
+
+const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+const run = (t) => `<w:r><w:t xml:space="preserve">${t}</w:t></w:r>`;
+const BREAK = '<w:r><w:lastRenderedPageBreak/></w:r>';
+async function makeDocx(body, { header } = {}) {
+  const zip = new JSZip();
+  zip.file('word/document.xml', `<?xml version="1.0"?><w:document ${W}><w:body>${body}</w:body></w:document>`);
+  if (header) zip.file('word/header1.xml', `<?xml version="1.0"?><w:hdr ${W}><w:p>${run(header)}</w:p></w:hdr>`);
+  return zip.generateAsync({ type: 'arraybuffer' });
+}
+const SAMPLE_WORD_BODY = [
+  `<w:p>${run('CAPÍTULO I')}</w:p>`,
+  `<w:p>${run('El señor Carlos Andrés Mendoza Ríos demandó.')}</w:p>`,
+  `<w:p>${BREAK}${run('Luego Carlos Andrés Mendoza Ríos insistió.')}</w:p>`,
+  `<w:p>${run('Texto que cruza ')}${BREAK}${run('a la página tres.')}</w:p>`,
+  `<w:p>${run('3')}</w:p>`
+].join('');
+
+describe('expediente desde Word', () => {
+  it('lee párrafos, partes y saltos de página que guardó Word', async () => {
+    const { paragraphs } = await readDocxParagraphs(await makeDocx(SAMPLE_WORD_BODY, { header: 'JUZGADO PRIMERO' }));
+    expect(paragraphs.map((p) => p.kind)).toEqual(['main', 'main', 'main', 'main', 'main', 'furniture']);
+    expect(paragraphs[2].breaks).toEqual([{ at: 0, rendered: true }]);
+    expect(paragraphs[3].breaks).toEqual([{ at: 16, rendered: true }]);
+    expect(paragraphs[5].label).toBe('Encabezado');
+
+    const full = buildDocxDocument(paragraphs);
+    expect(full.unit).toBe('pagina');
+    expect(full.pageCount).toBe(3);
+    expect(full.paragraphs.map((p) => [p.page, p.endPage])).toEqual([[1, 1], [1, 1], [2, 2], [2, 3], [3, 3], [3, 3]]);
+    expect(full.paragraphs[0].heading).toBe(true);
+    expect(full.paragraphs.at(-1).text).toBe('Encabezado: JUZGADO PRIMERO');
+
+    const reduced = buildDocxDocument(paragraphs, { reduce: true });
+    expect(reduced.paragraphs.map((p) => p.text)).not.toContain('3');
+    expect(reduced.paragraphs.some((p) => p.text.includes('JUZGADO'))).toBe(false);
+    expect(reduced.removed).toMatchObject({ repeated: 1, pageNumbers: 1 });
+  });
+
+  it('usa los saltos manuales si Word no guardó la paginación, y el número de párrafo si no hay ninguno', () => {
+    const p = (text, breaks = []) => ({ text, kind: 'main', label: '', breaks });
+    const manual = buildDocxDocument([p('Uno.'), p('Dos.', [{ at: 0, rendered: false }]), p('Tres.')]);
+    expect(manual.paragraphs.map((x) => x.page)).toEqual([1, 2, 2]);
+    const none = buildDocxDocument([p('Uno.'), p(''), p('Dos.'), p('Tres.')]);
+    expect(none.unit).toBe('parrafo');
+    expect(none.paragraphs.map((x) => x.page)).toEqual([1, 2, 3]);
+  });
+
+  it('marca [Página N] o, sin paginación, no pone marcas y cita párrafos', () => {
+    const blocks = [{ index: 0, page: 1, text: 'A' }, { index: 1, page: 2, text: 'B' }];
+    expect(renderBlocks(blocks, [], 'pagina')).toBe('[Página 1]\n\nA\n\n[Página 2]\n\nB\n');
+    expect(renderBlocks(blocks, [], 'parrafo')).toBe('A\n\nB\n');
+    const parts = renderParts({ blocks, parts: [{ from: 0, to: 1, overlapFrom: 0 }, { from: 1, to: 2, overlapFrom: 1 }], emptyPages: [], unit: 'parrafo' });
+    expect(parts[1].text).toMatch(/^Parte 2 de 2 · párrafo 2\n/);
+    expect(renderWhole({ name: 'x', blocks, emptyPages: [], unit: 'pagina' })).toContain('Expediente completo · páginas 1–2');
   });
 });
