@@ -22,6 +22,7 @@ export default function Header({ screen, onScreen, anonymizer }) {
         <div className="brand"><BrandMark /><span>Minoscreto</span></div>
         <nav className="tabs" aria-label="Secciones">
           <button type="button" className={`tab${screen === 'anonymize' ? ' on' : ''}`} onClick={() => onScreen('anonymize')}>Anonimizar</button>
+          <button type="button" className={`tab${screen === 'expediente' ? ' on' : ''}`} onClick={() => onScreen('expediente')}>Expediente PDF</button>
           <button type="button" className={`tab${screen === 'restore' ? ' on' : ''}`} onClick={() => onScreen('restore')}>Restaurar nombres</button>
         </nav>
         <span className="priv"><LockIcon />Tu documento se procesa en este navegador y no se sube a ningún servidor</span>

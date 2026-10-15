@@ -27,4 +27,15 @@ describe('App', () => {
     expect(screen.getByPlaceholderText(/Pega aquí la respuesta/)).toBeTruthy();
     cleanup();
   }, 20000);
+
+  it('abre el modo expediente y rechaza archivos que no son PDF', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Expediente PDF' }));
+    expect(screen.getByRole('button', { name: 'Elegir PDF' })).toBeTruthy();
+    const input = document.querySelector('input[type="file"][accept^=".pdf"]');
+    fireEvent.change(input, { target: { files: [new File(['x'], 'nota.txt', { type: 'text/plain' })] } });
+    await waitFor(() => expect(document.querySelector('.toast').textContent).toMatch(/recibe PDF/));
+    cleanup();
+  });
 });
