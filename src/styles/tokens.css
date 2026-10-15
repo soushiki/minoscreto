@@ -1,0 +1,31 @@
+/* Diseño: mesa de trabajo en dos columnas, papel (serif) sobre interfaz sobria; el verde tinta marca lo ya resuelto. */
+:root {
+  --bg: #F3F4F1; --surface: #FFFFFF; --surface2: #ECEFEA; --ink: #18221E; --ink2: #526059; --line: #D8DDD6;
+  --accent: #0D5C4B; --accent-ink: #FFFFFF; --accent-soft: #D9EDE6;
+  --mark: #FFE16B; --mark-ink: #2E2500; --cur: #FFB020;
+  --warn-bg: #FFF1D4; --warn-ink: #5E3D00; --warn-line: #EBC878; --bad: #B3261E;
+  --tag-l: .93; --tag-c: .055; --tagfg-l: .36; --tagfg-c: .13; --tagbd-l: .62; --tagbd-c: .14;
+  --ui: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --doc: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  --shadow: 0 1px 2px rgba(20,30,25,.06), 0 6px 18px rgba(20,30,25,.05);
+  --top-h: 56px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111715; --surface: #1A2320; --surface2: #222D29; --ink: #E6EDE9; --ink2: #9AA9A2; --line: #2D3A35;
+    --accent: #5ECDB0; --accent-ink: #06211A; --accent-soft: #16342B;
+    --mark: #6A5A10; --mark-ink: #FFF4BE; --cur: #B07A00;
+    --warn-bg: #3A2D10; --warn-ink: #F3D9A0; --warn-line: #6B5421; --bad: #F2A19B;
+    --tag-l: .34; --tag-c: .07; --tagfg-l: .88; --tagfg-c: .09; --tagbd-l: .62; --tagbd-c: .12;
+    --shadow: none; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111715; --surface: #1A2320; --surface2: #222D29; --ink: #E6EDE9; --ink2: #9AA9A2; --line: #2D3A35;
+  --accent: #5ECDB0; --accent-ink: #06211A; --accent-soft: #16342B;
+  --mark: #6A5A10; --mark-ink: #FFF4BE; --cur: #B07A00;
+  --warn-bg: #3A2D10; --warn-ink: #F3D9A0; --warn-line: #6B5421; --bad: #F2A19B;
+  --tag-l: .34; --tag-c: .07; --tagfg-l: .88; --tagfg-c: .09; --tagbd-l: .62; --tagbd-c: .12;
+  --shadow: none; color-scheme: dark;
+}

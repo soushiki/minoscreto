@@ -1,0 +1,34 @@
+body { background: var(--bg); color: var(--ink); font-family: var(--ui); font-size: 14px; line-height: 1.45; }
+* { box-sizing: border-box; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1, h2, h3, p { margin: 0; }
+.wrap { max-width: 1480px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* Tipos de dato: solo cambia el matiz */
+.t-PERSONA { --h: 255; } .t-EMPRESA { --h: 305; } .t-CEDULA { --h: 50; } .t-NIT { --h: 70; }
+.t-CORREO { --h: 205; } .t-TELEFONO { --h: 180; } .t-DIRECCION { --h: 355; } .t-CUENTA { --h: 150; }
+.t-RADICADO { --h: 95; } .t-PLACA { --h: 25; } .t-FECHA { --h: 235; } .t-MONTO { --h: 130; } .t-OTRO { --h: 285; }
+.tinted { background: oklch(var(--tag-l) var(--tag-c) var(--h)); color: oklch(var(--tagfg-l) var(--tagfg-c) var(--h)); }
+
+.btn { font-weight: 500; font-size: 13.5px; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; justify-content: center; white-space: nowrap; }
+.btn:hover { background: var(--surface2); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.1); background: var(--accent); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--ink2); }
+.btn.ghost:hover { background: var(--surface2); }
+.btn.sm { padding: 4px 9px; font-size: 12.5px; }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+.lbl, .h { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink2); font-weight: 600; }
+.h { margin-bottom: 8px; }
+
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 80; background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 13.5px; max-width: min(520px, calc(100vw - 32px)); box-shadow: 0 8px 30px rgba(0,0,0,.3); }
+.toast.err { background: var(--bad); color: #fff; }
+.veil { position: fixed; inset: 0; z-index: 90; background: color-mix(in srgb, var(--accent) 86%, transparent); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 600; }
+
+
+[hidden] { display: none !important; }
+html, body { margin: 0; }

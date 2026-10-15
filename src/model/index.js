@@ -1,0 +1,12 @@
+export { TYPES, TYPE_BY_ID } from './types.js';
+export { fold, normKey, findOccurrences, searchRanges, segmentsOf } from './text.js';
+export { detect } from './detect.js';
+export * from './entities.js';
+export * from './analysis.js';
+export * from './dictionary.js';
+export { openDocx, partLabel, DocxError } from './docx/package.js';
+export { exportAnonymized } from './docx/anonymize.js';
+export { restoreDocx, restoreText } from './docx/restore.js';
+export { buildDocx } from './docx/builder.js';
+export { DOCX_MIME } from './docx/constants.js';
+export { SAMPLE_NAME, SAMPLE_PARAGRAPHS } from './docx/sample.js';

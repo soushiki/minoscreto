@@ -1,0 +1,12 @@
+/* Barra superior */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; background: var(--surface); border-bottom: 1px solid var(--line); }
+.topin { display: flex; align-items: center; gap: 10px 18px; flex-wrap: wrap; padding-top: 9px; padding-bottom: 9px; }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 17px; letter-spacing: -.01em; }
+.brand svg { width: 24px; height: 24px; fill: var(--accent); }
+.tabs { display: flex; gap: 2px; background: var(--surface2); padding: 3px; border-radius: 10px; }
+.tab { border: 0; background: transparent; padding: 6px 14px; border-radius: 8px; cursor: pointer; font-weight: 500; color: var(--ink2); }
+.tab.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.acts { display: flex; gap: 8px; align-items: center; margin-left: auto; flex-wrap: wrap; }
+.priv { font-size: 12px; color: var(--ink2); display: flex; align-items: center; gap: 6px; }
+.priv svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+

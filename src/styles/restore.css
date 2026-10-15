@@ -1,0 +1,17 @@
+/* Restaurar */
+.rs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; padding-top: 18px; padding-bottom: 40px; align-items: start; }
+.rs-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.rs h2 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+.rs p.sub { color: var(--ink2); font-size: 13px; margin-bottom: 10px; }
+.drop { border: 1.5px dashed var(--line); border-radius: 10px; padding: 16px; text-align: center; color: var(--ink2); cursor: pointer; background: var(--bg); display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.chip { font-family: var(--mono); font-size: 11.5px; padding: 2px 7px; border-radius: 5px; background: var(--surface2); }
+textarea.paste { width: 100%; min-height: 200px; resize: vertical; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: 10px 12px; font-family: var(--doc); font-size: 15px; line-height: 1.55; }
+.restored { font-family: var(--doc); font-size: 15.5px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--bg); max-height: 52vh; overflow: auto; }
+.restored mark { background: var(--accent-soft); color: inherit; border-bottom: 2px solid var(--accent); border-radius: 3px; }
+.stat { font-weight: 600; }
+.row-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.muted { color: var(--ink2); font-size: 13px; }
+.mt { margin-top: 10px; }
+

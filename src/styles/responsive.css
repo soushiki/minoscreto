@@ -1,0 +1,73 @@
+/* Tablet: una sola columna, pero el documento sigue lado a lado */
+@media (max-width: 900px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .side { position: static; max-height: none; overflow: visible; }
+  .rs { grid-template-columns: minmax(0, 1fr); }
+  .priv { display: none; }
+  .acts { margin-left: 0; width: 100%; }
+}
+
+/* Celular: la comparación pasa a ser un interruptor Original / Anonimizado */
+@media (max-width: 760px) {
+  body { font-size: 15px; }
+
+  .top { position: static; }
+  .topin { gap: 8px 12px; padding-top: 8px; padding-bottom: 8px; }
+  .brand { font-size: 16px; }
+  .tabs { flex: 1 1 auto; min-width: 0; }
+  .tab { flex: 1; padding: 8px 8px; font-size: 13px; white-space: nowrap; }
+  .acts { gap: 6px; }
+  .acts .btn { min-height: 40px; padding: 8px 10px; }
+  .acts .btn.primary { flex: 1 1 100%; order: 9; min-height: 44px; }
+  .acts .btn:not(.primary):not(.ghost) { flex: 1 1 auto; }
+
+  .layout { gap: 12px; padding-top: 10px; padding-bottom: 28px; }
+  .side { display: contents; }
+  .card-search { order: 1; }
+  .sheet { order: 2; }
+  .card-sugg { order: 3; }
+  .card-cats { order: 4; }
+
+  input, select, textarea { font-size: 16px; }
+  .qrow .btn, .qadd .btn { min-height: 42px; }
+  .qrow input { padding: 10px 12px; }
+  .qadd { flex-wrap: wrap; }
+  .qadd .btn { flex: 1 1 100%; }
+  .qadd select { padding: 9px 10px; }
+  .erow { padding: 8px 4px; gap: 10px; }
+  .xbtn { padding: 6px 8px; }
+  input[type="checkbox"] { width: 20px; height: 20px; }
+  .cat summary { padding: 11px 0; }
+
+  .sheet { border-radius: 10px; }
+  .stick, .sheethead { display: contents; }
+  .sheethead .doc { padding: 12px 14px 0; }
+  .sheethead > .btn { margin: 8px 14px 0; min-height: 40px; }
+  .view-switch { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 8px); z-index: 10; margin: 10px 14px 0; padding: 4px;
+    box-shadow: 0 0 0 8px var(--surface), 0 8px 10px 4px color-mix(in srgb, var(--ink) 8%, transparent); }
+  .view-switch button { flex: 1; padding: 9px 8px; font-size: 14px; }
+  .cols { grid-template-columns: 1fr; font-size: 11px; margin-top: 12px; }
+  .cols div { padding: 6px 14px; }
+
+  .cell { padding: 10px 14px; font-size: 16.5px; line-height: 1.6; scroll-margin-top: 80px; }
+  .tag { font-size: .78em; }
+  .ent { padding: 2px 0; }
+
+  .banner { margin-top: 10px; }
+  .note { font-size: 13px; }
+  .note .btn { min-height: 40px; }
+
+  /* La ventana de acciones sube desde abajo, a todo lo ancho */
+  .pop { left: 0 !important; right: 0; top: auto !important; bottom: 0; width: auto; max-height: 70vh; overflow: auto;
+    border-radius: 16px 16px 0 0; border-bottom: 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px)); gap: 11px; }
+  .pop .btn { min-height: 44px; white-space: normal; text-align: center; }
+  .pop select { padding: 10px; }
+  .toast { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+
+  .rs { gap: 12px; padding-top: 12px; padding-bottom: 28px; }
+  .rs .btn, .row-btns .btn { min-height: 42px; }
+  textarea.paste { min-height: 160px; }
+  .restored { max-height: none; }
+}
+
+@media (prefers-reduced-motion: reduce) { .flash { animation: none; } .cat summary::before { transition: none; } }
