@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from 'react';
 const KEY = 'minoscreto.guia';
 
 // Lo recordado es solo una comodidad: si el navegador no deja guardar, la guía funciona igual.
-export function readGuidePrefs() {
+function readGuidePrefs() {
   try {
     const raw = window.localStorage.getItem(KEY);
     const prefs = raw ? JSON.parse(raw) : {};
@@ -39,20 +39,19 @@ export function useWelcome({ openShort, openLong, showExample, goRestore, goTool
 
   const actions = useMemo(() => ({
     protect: () => go('length'),
-    restore: () => { remember({ skip: false }); goRestore(); },
+    restore: goRestore,
     chooseLength: (length) => { remember({ length }); go(length); },
     chooseOutput: (value) => remember({ output: value }),
     back,
     restart,
-    skip: () => { remember({ skip: true }); goTools(); }
+    skip: goTools
   }), [go, back, restart, remember, goRestore, goTools]);
 
   const openFile = useCallback((file) => {
     if (!file) return;
-    remember({ skip: false });
     if (step === 'long' || /\.pdf$/i.test(file.name)) openLong(file, step === 'long' ? output : 'one');
     else openShort(file);
-  }, [step, output, openLong, openShort, remember]);
+  }, [step, output, openLong, openShort]);
 
   return {
     step, canGoBack: history.length > 1, lastLength: prefs.length || null, output,
