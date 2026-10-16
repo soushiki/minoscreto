@@ -3,6 +3,7 @@ import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/re
 import userEvent from '@testing-library/user-event';
 import JSZip from 'jszip';
 import App from '../src/App.jsx';
+import { goToTools } from './helpers.js';
 import {
   buildDocx, buildEntities, buildDictionary, dictionaryFileName, protectedFileName, readDictionaryFrom
 } from '../src/model/index.js';
@@ -70,7 +71,7 @@ describe('descarga y copia en la app', () => {
     const user = userEvent.setup();
     const writeText = mockClipboard();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'Ir directo a las herramientas' }));
+    await goToTools(user);
     await waitFor(() => expect(document.body.textContent).toContain('[EMPRESA_1]'), { timeout: 8000 });
     expect(screen.queryByRole('button', { name: /^Diccionario/ })).toBeNull();
 
@@ -96,6 +97,7 @@ describe('descarga y copia en la app', () => {
   it('Expediente de un archivo: documento y diccionario por separado, en ese orden', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await goToTools(user);
     await user.click(screen.getByRole('button', { name: 'Expediente' }));
     fireEvent.change(document.querySelector('input[type="file"][accept^=".pdf"]'), { target: { files: [await wordWithTwoPages()] } });
     await waitFor(() => expect(document.querySelector('.xp-pre')).toBeTruthy(), { timeout: 8000 });
@@ -107,6 +109,7 @@ describe('descarga y copia en la app', () => {
     const user = userEvent.setup();
     const writeText = mockClipboard();
     render(<App />);
+    await goToTools(user);
     await user.click(screen.getByRole('button', { name: 'Expediente' }));
     fireEvent.change(document.querySelector('input[type="file"][accept^=".pdf"]'), { target: { files: [await wordWithTwoPages()] } });
     await waitFor(() => expect(document.querySelector('.xp-pre')).toBeTruthy(), { timeout: 8000 });
