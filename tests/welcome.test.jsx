@@ -52,7 +52,7 @@ describe('bienvenida guiada', () => {
     await waitFor(() => expect(document.body.textContent).toContain('Contrato de ejemplo'), { timeout: 8000 });
   });
 
-  it('documento largo: en partes por defecto, recuerda «un solo archivo» y abre Expediente con esa opción', async () => {
+  it('documento largo: en partes por defecto, «un solo archivo» abre Expediente con esa opción y no se guarda para la próxima vez', async () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole('button', { name: /Proteger un documento/ }));
@@ -61,7 +61,6 @@ describe('bienvenida guiada', () => {
     expect(screen.getByRole('radio', { name: /En partes para la IA/ }).getAttribute('aria-checked')).toBe('true');
     await user.click(screen.getByRole('radio', { name: /Un solo archivo/ }));
     expect(screen.getByRole('radio', { name: /Un solo archivo/ }).getAttribute('aria-checked')).toBe('true');
-    expect(JSON.parse(window.localStorage.getItem('minoscreto.guia'))).toMatchObject({ length: 'long', output: 'one' });
 
     await chooseFile(await wordFile(['La señora Laura Patricia Ortega Jiménez demandó.', 'Laura Patricia Ortega Jiménez firmó.'], 'expediente.docx'));
     await waitFor(() => expect(document.querySelector('.xp-pre')?.textContent || '').toContain('[PERSONA_1] firmó'), { timeout: 8000 });
@@ -70,10 +69,13 @@ describe('bienvenida guiada', () => {
     expect(screen.getByRole('button', { name: 'Copiar texto para la IA' })).toBeTruthy();
     cleanup();
 
-    // La próxima vez, la guía marca lo que eligió.
+    // Otro documento empieza desde cero: nada recordado.
     render(<App />);
     await user.click(screen.getByRole('button', { name: /Proteger un documento/ }));
-    expect(screen.getByRole('button', { name: /^Largo/ }).textContent).toContain('La última vez');
+    expect(document.querySelector('.wl-tag')).toBeNull();
+    await user.click(screen.getByRole('button', { name: /^Largo/ }));
+    expect(screen.getByRole('radio', { name: /En partes para la IA/ }).getAttribute('aria-checked')).toBe('true');
+    expect(window.localStorage.length).toBe(0);
   });
 
   it('«Ir directo a las herramientas» va a las herramientas solo esa vez; al volver a abrir, aparece la bienvenida', async () => {
