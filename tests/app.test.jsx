@@ -3,6 +3,7 @@ import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/re
 import userEvent from '@testing-library/user-event';
 import JSZip from 'jszip';
 import App from '../src/App.jsx';
+import { goToTools } from './helpers.js';
 
 beforeAll(() => {
   window.scrollTo = () => {};
@@ -14,7 +15,7 @@ describe('App', () => {
   it('carga el ejemplo, anonimiza una búsqueda, deshace y abre Restaurar', async () => {
     const user = userEvent.setup();
     render(<App />);
-    await user.click(screen.getByRole('button', { name: 'Ir directo a las herramientas' }));
+    await goToTools(user);
     await waitFor(() => expect(document.body.textContent).toContain('[EMPRESA_1]'), { timeout: 8000 });
     expect(document.body.textContent).toContain('[PERSONA_1]');
 
@@ -34,6 +35,7 @@ describe('App', () => {
   it('abre el modo expediente y rechaza archivos que no son PDF ni Word', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await goToTools(user);
     await user.click(screen.getByRole('button', { name: 'Expediente' }));
     expect(screen.getByRole('button', { name: 'Elegir archivo' })).toBeTruthy();
     const input = document.querySelector('input[type="file"][accept^=".pdf"]');
@@ -45,6 +47,7 @@ describe('App', () => {
   it('anonimiza un Word en el modo expediente con marcas de página', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await goToTools(user);
     await user.click(screen.getByRole('button', { name: 'Expediente' }));
     const zip = new JSZip();
     const w = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';

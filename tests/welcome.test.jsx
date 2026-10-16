@@ -89,4 +89,20 @@ describe('bienvenida guiada', () => {
     await user.click(screen.getByRole('button', { name: /volver al inicio/ }));
     expect(heading()).toBe('Bienvenido a Minoscreto');
   });
+
+  it('la bienvenida muestra solo el logo y las dos opciones; el menú aparece en las herramientas y el logo vuelve al inicio', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    expect(document.querySelector('.tabs')).toBeNull();
+    expect(document.querySelector('.priv')).toBeNull();
+    expect(document.querySelectorAll('.wl-choice')).toHaveLength(2);
+    await user.click(screen.getByRole('button', { name: /Proteger un documento/ }));
+    expect(document.querySelector('.tabs')).toBeNull();
+    await user.click(screen.getByRole('button', { name: /^Corto/ }));
+    await user.click(screen.getByRole('button', { name: 'Ver primero un ejemplo' }));
+    expect(document.querySelector('.tab.on').textContent).toBe('Anonimizar');
+    await user.click(screen.getByRole('button', { name: /volver al inicio/ }));
+    expect(heading()).toBe('Bienvenido a Minoscreto');
+    expect(document.querySelector('.tabs')).toBeNull();
+  });
 });
