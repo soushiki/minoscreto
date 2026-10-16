@@ -4,7 +4,7 @@ import { useDownloads } from './viewmodels/useDownloads.js';
 import { useAnonymizer } from './viewmodels/useAnonymizer.js';
 import { useRestorer } from './viewmodels/useRestorer.js';
 import { useExpediente } from './viewmodels/useExpediente.js';
-import { useWelcome, readGuidePrefs } from './viewmodels/useWelcome.js';
+import { useWelcome } from './viewmodels/useWelcome.js';
 import { useFileDrop } from './utils/useFileDrop.js';
 import Header from './views/Header.jsx';
 import AnonymizeScreen from './views/AnonymizeScreen.jsx';
@@ -15,8 +15,8 @@ import Toast from './components/Toast.jsx';
 import DropVeil from './components/DropVeil.jsx';
 
 export default function App() {
-  // Quien pidió ir directo a las herramientas no vuelve a ver la guía al abrir.
-  const [screen, setScreen] = useState(() => (readGuidePrefs().skip ? 'anonymize' : 'welcome'));
+  // Siempre se abre en la bienvenida: desde ahí se llega a todas las opciones.
+  const [screen, setScreen] = useState('welcome');
   const { toast, show } = useToast();
   const save = useDownloads(show);
   const anonymizer = useAnonymizer({ save, notify: show });

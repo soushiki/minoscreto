@@ -76,17 +76,17 @@ describe('bienvenida guiada', () => {
     expect(screen.getByRole('button', { name: /^Largo/ }).textContent).toContain('La última vez');
   });
 
-  it('«Ir directo a las herramientas» se recuerda, y el logo vuelve al inicio', async () => {
+  it('«Ir directo a las herramientas» va a las herramientas solo esa vez; al volver a abrir, aparece la bienvenida', async () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole('button', { name: 'Ir directo a las herramientas' }));
     expect(document.querySelector('.tab.on').textContent).toBe('Anonimizar');
+    await user.click(screen.getByRole('button', { name: /volver al inicio/ }));
+    expect(heading()).toBe('Bienvenido a Minoscreto');
+    await user.click(screen.getByRole('button', { name: 'Ir directo a las herramientas' }));
     cleanup();
 
     render(<App />);
-    expect(heading()).toBeUndefined();
-    expect(document.querySelector('.tab.on').textContent).toBe('Anonimizar');
-    await user.click(screen.getByRole('button', { name: /volver al inicio/ }));
     expect(heading()).toBe('Bienvenido a Minoscreto');
   });
 
