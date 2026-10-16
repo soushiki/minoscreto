@@ -1,51 +1,29 @@
 import { useCallback, useMemo, useState } from 'react';
 
-const KEY = 'minoscreto.guia';
+const DEFAULT_OUTPUT = 'parts';
 
-// Lo recordado es solo una comodidad: si el navegador no deja guardar, la guía funciona igual.
-function readGuidePrefs() {
-  try {
-    const raw = window.localStorage.getItem(KEY);
-    const prefs = raw ? JSON.parse(raw) : {};
-    return prefs && typeof prefs === 'object' ? prefs : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeGuidePrefs(change) {
-  try {
-    window.localStorage.setItem(KEY, JSON.stringify({ ...readGuidePrefs(), ...change }));
-  } catch {
-    // Sin almacenamiento disponible (ventana privada, permisos): no pasa nada.
-  }
-}
-
-/** Pasos: 'start' (¿qué desea hacer?) → 'length' (¿qué tan largo?) → 'short' o 'long' (elegir documento). */
+/**
+ * Pasos: 'start' (¿qué desea hacer?) → 'length' (¿qué tan largo?) → 'short' o 'long' (elegir documento).
+ * No se guarda nada entre visitas: cada documento empieza la guía desde cero.
+ */
 export function useWelcome({ openShort, openLong, showExample, goRestore, goTools }) {
-  const [prefs, setPrefs] = useState(readGuidePrefs);
   const [history, setHistory] = useState(['start']);
+  const [output, setOutput] = useState(DEFAULT_OUTPUT);
   const step = history[history.length - 1];
-  const output = prefs.output === 'one' ? 'one' : 'parts';
-
-  const remember = useCallback((change) => {
-    writeGuidePrefs(change);
-    setPrefs((p) => ({ ...p, ...change }));
-  }, []);
 
   const go = useCallback((next) => setHistory((h) => [...h, next]), []);
   const back = useCallback(() => setHistory((h) => (h.length > 1 ? h.slice(0, -1) : h)), []);
-  const restart = useCallback(() => setHistory(['start']), []);
+  const restart = useCallback(() => { setHistory(['start']); setOutput(DEFAULT_OUTPUT); }, []);
 
   const actions = useMemo(() => ({
     protect: () => go('length'),
     restore: goRestore,
-    chooseLength: (length) => { remember({ length }); go(length); },
-    chooseOutput: (value) => remember({ output: value }),
+    chooseLength: go,
+    chooseOutput: setOutput,
     back,
     restart,
     skip: goTools
-  }), [go, back, restart, remember, goRestore, goTools]);
+  }), [go, back, restart, goRestore, goTools]);
 
   const openFile = useCallback((file) => {
     if (!file) return;
@@ -53,8 +31,5 @@ export function useWelcome({ openShort, openLong, showExample, goRestore, goTool
     else openShort(file);
   }, [step, output, openLong, openShort]);
 
-  return {
-    step, canGoBack: history.length > 1, lastLength: prefs.length || null, output,
-    actions, openFile, showExample
-  };
+  return { step, canGoBack: history.length > 1, output, actions, openFile, showExample };
 }

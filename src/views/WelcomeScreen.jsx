@@ -4,7 +4,7 @@ import { BackIcon, KeyIcon, LockIcon, PageIcon, PartsIcon, ShieldIcon, StackIcon
 const WORD = '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.pdf,application/pdf';
 const LONG = '.pdf,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
-function Choice({ icon, title, text, onClick, tag }) {
+function Choice({ icon, title, text, onClick }) {
   return (
     <button type="button" className="wl-choice" onClick={onClick}>
       <span className="wl-icon">{icon}</span>
@@ -12,7 +12,6 @@ function Choice({ icon, title, text, onClick, tag }) {
         <strong>{title}</strong>
         <span>{text}</span>
       </span>
-      {tag && <span className="wl-tag">{tag}</span>}
     </button>
   );
 }
@@ -38,16 +37,15 @@ function Start({ vm }) {
 }
 
 function Length({ vm }) {
-  const last = vm.lastLength;
   return (
     <>
       <h1>¿Qué tan largo es su documento?</h1>
       <p className="wl-lead">Así le mostramos el camino más sencillo.</p>
       <div className="wl-choices">
         <Choice icon={<PageIcon />} title="Corto" text="Hasta unas 30 páginas: un contrato, una carta, un memorial."
-          onClick={() => vm.actions.chooseLength('short')} tag={last === 'short' ? 'La última vez' : null} />
+          onClick={() => vm.actions.chooseLength('short')} />
         <Choice icon={<StackIcon />} title="Largo" text="Expedientes, contratos extensos, cientos de páginas."
-          onClick={() => vm.actions.chooseLength('long')} tag={last === 'long' ? 'La última vez' : null} />
+          onClick={() => vm.actions.chooseLength('long')} />
       </div>
     </>
   );
