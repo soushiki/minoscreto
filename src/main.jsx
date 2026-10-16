@@ -7,6 +7,9 @@ import './styles/header.css';
 import './styles/anonymize.css';
 import './styles/popover.css';
 import './styles/restore.css';
+import './styles/expediente.css';
+import './styles/welcome.css';
+import './styles/downloads.css';
 import './styles/responsive.css';
 
 createRoot(document.getElementById('root')).render(

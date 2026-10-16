@@ -1,0 +1,72 @@
+/* Bienvenida guiada: una pregunta por pantalla, opciones grandes y palabras sencillas. */
+button.brand { border: 0; background: none; padding: 4px 6px 4px 0; margin: 0; cursor: pointer; color: inherit; border-radius: 8px; font: inherit; font-weight: 600; font-size: 17px; }
+button.brand:hover span { text-decoration: underline; text-underline-offset: 3px; }
+
+.wl-wrap { max-width: 760px; padding-top: 22px; padding-bottom: 48px; }
+.wl-nav { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; min-height: 40px; }
+.wl-nav .btn { font-size: 15px; padding: 9px 12px; min-height: 44px; }
+.wl-back svg { width: 18px; height: 18px; }
+.wl-card { padding: 28px 30px 30px; border-radius: 16px; box-shadow: var(--shadow); }
+.wl h1 { font-size: 27px; line-height: 1.2; letter-spacing: -.01em; font-weight: 600; margin-bottom: 10px; }
+.wl h2 { font-size: 19px; font-weight: 600; margin: 24px 0 12px; }
+.wl-lead { font-size: 17px; line-height: 1.55; color: var(--ink); max-width: 60ch; }
+.wl-safe { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; padding: 8px 12px; border-radius: 10px; background: var(--accent-soft); font-size: 15px; font-weight: 500; }
+.wl-safe svg { width: 18px; height: 18px; fill: none; stroke: var(--accent); stroke-width: 2; flex: none; }
+
+.wl-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 18px; }
+.wl-choice { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; text-align: left; padding: 20px; min-height: 150px;
+  border: 1.5px solid var(--line); border-radius: 14px; background: var(--surface); cursor: pointer; font-size: 15.5px; line-height: 1.45; color: var(--ink); }
+.wl-choice:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface)); }
+.wl-choice:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.wl-icon { width: 48px; height: 48px; border-radius: 12px; background: var(--accent-soft); display: flex; align-items: center; justify-content: center; flex: none; }
+.wl-icon svg { width: 28px; height: 28px; fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.wl-ctext { display: flex; flex-direction: column; gap: 4px; }
+.wl-ctext strong { font-size: 18px; line-height: 1.3; }
+.wl-ctext > span { color: var(--ink2); }
+.wl-tag { position: absolute; top: 14px; right: 14px; font-size: 12.5px; color: var(--ink2); background: var(--surface2); padding: 3px 8px; border-radius: 99px; }
+.wl-radio.on { border-color: var(--accent); border-width: 2px; background: color-mix(in srgb, var(--accent-soft) 60%, var(--surface)); }
+.wl-radio.on::after { content: '✓'; position: absolute; top: 14px; right: 16px; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
+  display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; }
+.wl-radio .wl-ctext { padding-right: 30px; }
+.wl-rec { display: inline-block; margin-left: 6px; font-size: 12.5px; font-weight: 600; color: var(--accent); vertical-align: 2px; }
+.wl-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 22px; }
+.wl-big { font-size: 17px; padding: 13px 22px; min-height: 52px; border-radius: 12px; }
+.wl-hint { margin-top: 12px; color: var(--ink2); font-size: 14.5px; }
+
+/* Tableta, o ventana ancha pero baja */
+@media (max-width: 900px), (max-height: 640px) and (max-width: 1280px) {
+  .wl-wrap { padding-top: 14px; padding-bottom: 32px; }
+  .wl-card { padding: 22px 22px 24px; }
+  .wl h1 { font-size: 24px; }
+  .wl h2 { margin-top: 18px; }
+  .wl-choice { min-height: 0; }
+}
+
+/* Celular vertical: opciones una debajo de otra, a todo lo ancho */
+@media (max-width: 600px) {
+  .wl-nav { margin-bottom: 6px; }
+  .wl-nav .btn { padding: 8px 6px; font-size: 14.5px; }
+  .wl-card { padding: 18px 16px 20px; border-radius: 14px; }
+  .wl h1 { font-size: 22px; }
+  .wl-lead { font-size: 16px; }
+  .wl-choices { grid-template-columns: 1fr; gap: 10px; margin-top: 14px; }
+  .wl-choice { flex-direction: row; align-items: center; padding: 16px 14px; gap: 14px; }
+  .wl-ctext strong { font-size: 17px; }
+  .wl-tag { position: static; order: 3; align-self: flex-start; }
+  .wl-radio.on::after { top: 10px; right: 10px; width: 22px; height: 22px; font-size: 13px; }
+  .wl-actions .btn { flex: 1 1 100%; }
+}
+
+/* Celular horizontal (pantalla baja): menos aire vertical, opciones lado a lado */
+@media (max-height: 480px) and (max-width: 960px) {
+  .wl-wrap { padding-top: 8px; padding-bottom: 20px; }
+  .wl-card { padding: 14px 18px 16px; }
+  .wl h1 { font-size: 20px; margin-bottom: 6px; }
+  .wl h2 { font-size: 17px; margin: 12px 0 8px; }
+  .wl-lead { font-size: 15px; }
+  .wl-safe { margin-top: 8px; }
+  .wl-choices { grid-template-columns: 1fr 1fr; margin-top: 10px; }
+  .wl-choice { flex-direction: row; align-items: center; padding: 12px; min-height: 0; }
+  .wl-icon { width: 40px; height: 40px; }
+  .wl-actions { margin-top: 12px; }
+}
