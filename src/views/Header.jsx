@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import { BrandMark, DownloadIcon, LockIcon } from '../components/Icons.jsx';
 
-export default function Header({ screen, onScreen, anonymizer }) {
+export default function Header({ screen, onScreen, onHome, anonymizer }) {
   const ref = useRef(null);
 
   useLayoutEffect(() => {
@@ -19,7 +19,7 @@ export default function Header({ screen, onScreen, anonymizer }) {
   return (
     <header className="top" ref={ref}>
       <div className="wrap topin">
-        <div className="brand"><BrandMark /><span>Minoscreto</span></div>
+        <button type="button" className="brand" onClick={onHome} title="Volver al inicio" aria-label="Minoscreto, volver al inicio"><BrandMark /><span>Minoscreto</span></button>
         <nav className="tabs" aria-label="Secciones">
           <button type="button" className={`tab${screen === 'anonymize' ? ' on' : ''}`} onClick={() => onScreen('anonymize')}>Anonimizar</button>
           <button type="button" className={`tab${screen === 'expediente' ? ' on' : ''}`} onClick={() => onScreen('expediente')}>Expediente</button>

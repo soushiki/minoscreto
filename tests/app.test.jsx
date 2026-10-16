@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import JSZip from 'jszip';
@@ -8,11 +8,13 @@ beforeAll(() => {
   window.scrollTo = () => {};
   window.ResizeObserver = window.ResizeObserver || class { observe() {} disconnect() {} unobserve() {} };
 });
+beforeEach(() => window.localStorage.clear());
 
 describe('App', () => {
   it('carga el ejemplo, anonimiza una búsqueda, deshace y abre Restaurar', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Ir directo a las herramientas' }));
     await waitFor(() => expect(document.body.textContent).toContain('[EMPRESA_1]'), { timeout: 8000 });
     expect(document.body.textContent).toContain('[PERSONA_1]');
 
