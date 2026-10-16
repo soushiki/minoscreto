@@ -3,7 +3,8 @@ body { background: var(--bg); color: var(--ink); font-family: var(--ui); font-si
 button, input, select, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 h1, h2, h3, p { margin: 0; }
-.wrap { max-width: 1480px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+/* Las pantallas de trabajo usan todo el ancho de la ventana; solo la bienvenida y la portada del expediente van centradas y angostas. */
+.wrap { margin: 0 auto; padding-left: max(16px, 1.5vw, env(safe-area-inset-left, 0px)); padding-right: max(16px, 1.5vw, env(safe-area-inset-right, 0px)); }
 
 /* Tipos de dato: solo cambia el matiz */
 .t-PERSONA { --h: 255; } .t-EMPRESA { --h: 305; } .t-CEDULA { --h: 50; } .t-NIT { --h: 70; }
