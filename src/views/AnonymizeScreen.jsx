@@ -5,6 +5,7 @@ import SuggestionsPanel from './anonymize/SuggestionsPanel.jsx';
 import CategoryList from './anonymize/CategoryList.jsx';
 import ComparisonSheet from './anonymize/ComparisonSheet.jsx';
 import Popover from './anonymize/Popover.jsx';
+import DownloadReceipt from '../components/DownloadReceipt.jsx';
 
 export default function AnonymizeScreen({ vm }) {
   const { undo, redo } = vm.actions;
@@ -25,6 +26,7 @@ export default function AnonymizeScreen({ vm }) {
     <main>
       <div className="wrap">
         <Banner vm={vm} />
+        <DownloadReceipt receipt={vm.receipt} onDictionaryAgain={vm.downloadDictionaryAgain} />
         <div className="layout">
           <aside className="side">
             <SearchPanel vm={vm} />

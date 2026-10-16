@@ -29,9 +29,13 @@ const partOrder = (a, b) => {
   return a < b ? -1 : a > b ? 1 : 0;
 };
 
+const OFF = new Set(['0', 'false', 'off']);
+
+/** Lee el texto del párrafo y dónde caen sus saltos de página (los que Word guardó al paginar y los manuales). */
 function readParagraph(p) {
   let text = '';
   const nodes = [];
+  const breaks = [];
   const walk = (parent) => {
     for (let child = parent.firstChild; child; child = child.nextSibling) {
       if (child.nodeType !== 1) continue;
@@ -44,13 +48,16 @@ function readParagraph(p) {
           text += value;
           continue;
         }
+        if (name === 'lastRenderedPageBreak') { breaks.push({ at: text.length, rendered: true }); continue; }
+        if (name === 'pageBreakBefore' && !OFF.has(child.getAttributeNS(W_NS, 'val') || '')) { breaks.push({ at: 0, rendered: false }); continue; }
+        if (name === 'br' && child.getAttributeNS(W_NS, 'type') === 'page') breaks.push({ at: text.length, rendered: false });
         if (name === 'tab' || name === 'br' || name === 'cr') { text += ' '; continue; }
       }
       walk(child);
     }
   };
   walk(p);
-  return { text, nodes };
+  return { text, nodes, breaks };
 }
 
 export async function openDocx(buffer) {
