@@ -1,0 +1,7 @@
+# Netlify construye el sitio desde GitHub en cada cambio a main: un solo dist/index.html autocontenido.
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
