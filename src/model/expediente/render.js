@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import { dictionaryToText } from '../dictionary.js';
+import { dictionaryFileName, dictionaryJson, safeName } from '../protectedFiles.js';
 import { formatPageRanges } from './document.js';
 
 const LABEL_NOTE = 'Los datos personales se reemplazaron por etiquetas entre corchetes, como [PERSONA_1] o [EMPRESA_2]. '
@@ -89,31 +89,38 @@ export function renderParts({ blocks, parts, emptyPages, selection = false, unit
 }
 
 const pad = (n, total) => String(n).padStart(String(total).length, '0');
-const safeName = (name) => name.replace(/[\\/:*?"<>|]+/g, '-').trim() || 'expediente';
 
 export function partFileName(name, number, total) {
-  return `${safeName(name)}-parte-${pad(number, total)}-de-${total}.md`;
+  return `${safeName(name)}_parte-${pad(number, total)}-de-${total}.md`;
 }
 
-const README = (total) => `Cómo usar estos archivos
-========================
+const README = (name, total) => `${name}: documento protegido en ${total} partes
+${'='.repeat(40)}
 
-1. Sube a la IA, en orden, los ${total} archivos de la carpeta «para-subir-a-la-IA». Cada uno empieza con «Parte X de ${total}» y le pide a la IA que espere hasta tener todas.
-2. Cuando la IA confirme que recibió las ${total} partes, haz tu pregunta.
-3. Para volver a ver los nombres reales en la respuesta, abre Minoscreto › Restaurar nombres y carga el diccionario de la carpeta «NO-SUBIR».
+Este archivo comprimido trae dos carpetas:
 
-NUNCA subas la carpeta «NO-SUBIR»: el diccionario contiene los datos reales.
+1. «para-subir-a-la-IA»: el texto con los nombres y datos personales cambiados por etiquetas
+   como [PERSONA_1]. Suba a la IA (ChatGPT, Claude, Gemini u otra) las ${total} partes, en orden,
+   una tras otra. Cada parte le pide a la IA que espere hasta tenerlas todas. Cuando la IA
+   confirme que recibió las ${total} partes, haga su pregunta.
+
+2. «NO-SUBIR»: el diccionario, la llave que dice qué nombre real corresponde a cada etiqueta.
+   Guárdelo en un lugar seguro. NUNCA lo suba a la IA ni lo comparta.
+
+Para recuperar los nombres reales en la respuesta de la IA: abra Minoscreto, elija
+«Recuperar los nombres reales» y cargue este mismo archivo comprimido (o el diccionario).
+Luego pegue la respuesta de la IA.
+
+Todo se hizo en su computador: el documento no se envió a ningún servidor.
 `;
 
-/** ZIP con las partes para la IA y, aparte, el diccionario para restaurar. */
+/** Expediente en partes: un solo .zip con las partes para la IA, el diccionario aparte y LEAME.txt. */
 export async function buildPartsZip({ name, parts, dictionary, type = 'blob' }) {
   const zip = new JSZip();
   const total = parts.length;
   const folder = zip.folder('para-subir-a-la-IA');
   for (const p of parts) folder.file(partFileName(name, p.number, total), p.text);
-  const secret = zip.folder('NO-SUBIR');
-  secret.file('diccionario.json', JSON.stringify(dictionary, null, 2));
-  secret.file('diccionario.txt', dictionaryToText(dictionary));
-  zip.file('LEEME.txt', README(total));
+  zip.folder('NO-SUBIR').file(dictionaryFileName(name), dictionaryJson(dictionary));
+  zip.file('LEAME.txt', README(safeName(name), total));
   return zip.generateAsync({ type, compression: 'DEFLATE', compressionOptions: { level: 6 } });
 }

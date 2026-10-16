@@ -66,7 +66,8 @@ describe('bienvenida guiada', () => {
     await chooseFile(await wordFile(['La señora Laura Patricia Ortega Jiménez demandó.', 'Laura Patricia Ortega Jiménez firmó.'], 'expediente.docx'));
     await waitFor(() => expect(document.querySelector('.xp-pre')?.textContent || '').toContain('[PERSONA_1] firmó'), { timeout: 8000 });
     expect(document.querySelector('.tab.on').textContent).toBe('Expediente');
-    expect(screen.getByRole('button', { name: /Descargar \.md/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Descargar' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Copiar texto para la IA' })).toBeTruthy();
     cleanup();
 
     // La próxima vez, la guía marca lo que eligió.

@@ -1,10 +1,11 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useReducer, useRef } from 'react';
-import { buildDictionary, dictionaryToText, DocxError, renameLabel } from '../model/index.js';
+import { buildDictionary, dictionaryFileName, dictionaryJson, DocxError, protectedFileName, renameLabel } from '../model/index.js';
 import {
   buildPartsZip, buildSearchIndex, estimateTokens, formatPageRanges, renderParts, renderWhole, searchIndex, splitParts, unitOf
 } from '../model/expediente/index.js';
 import { expedienteReducer, initialExpediente } from './expedienteState.js';
 import { runExpedienteTask } from './expedienteWorker.js';
+import { useProtectedDownload } from './useProtectedDownload.js';
 
 const keyOf = (p) => `${p.page}:${p.text}`;
 const variantKey = (s) => `${s.entityId}:${s.variant}`;
@@ -14,6 +15,9 @@ export function useExpediente({ save, notify }) {
   const [state, dispatch] = useReducer(expedienteReducer, initialExpediente);
   const { docs, entities, reduce, applied, appliedFor, selected, scope, format, split, query } = state;
   const abort = useRef(null);
+  const protectedDownload = useProtectedDownload({ save, notify });
+  const { clear: clearReceipt, downloadPair, downloadBundle, copyText } = protectedDownload;
+  useEffect(() => { clearReceipt(); }, [docs, clearReceipt]);
 
   const doc = docs ? (reduce ? docs.reduced : docs.full) : null;
   const variant = reduce ? 'reduced' : 'full';
@@ -150,39 +154,30 @@ export function useExpediente({ save, notify }) {
 
   const cancel = useCallback(() => { abort.current?.abort(); dispatch({ type: 'failed' }); }, []);
 
-  const exportName = `${state.name}-anonimizado`;
-
+  // Un archivo: el .md protegido y, medio segundo después, el diccionario. En partes: un .zip que trae ambos.
   const download = useCallback(async () => {
     if (!rendered.length) return;
     const t = now();
+    const dict = { name: dictionaryFileName(state.name), text: dictionaryJson(dictionary) };
     try {
-      let saved;
       if (rendered.length === 1) {
-        saved = await save(`${exportName}.md`, new Blob([rendered[0].text], { type: 'text/markdown;charset=utf-8' }));
+        await downloadPair({ name: protectedFileName(state.name, 'md'), blob: new Blob([rendered[0].text], { type: 'text/markdown;charset=utf-8' }) }, dict);
       } else {
         const blob = await buildPartsZip({ name: state.name, parts: rendered, dictionary });
-        saved = await save(`${exportName}-${rendered.length}-partes.zip`, blob);
+        await downloadBundle({ name: protectedFileName(state.name, 'zip'), blob }, dict);
       }
       dispatch({ type: 'exported', ms: now() - t });
-      if (!saved) return;
-      if (rendered.length > 1) {
-        dispatch({ type: 'dictionary-saved' });
-        notify(`ZIP guardado: ${rendered.length} partes para la IA y, en la carpeta NO-SUBIR, el diccionario para restaurar.`);
-      } else {
-        notify(state.dictionarySaved ? 'Texto anonimizado guardado.' : 'Texto guardado. Descarga también el diccionario: sin él no podrás restaurar los nombres.');
-      }
     } catch (error) {
       notify(`No se pudo exportar: ${error.message}`, true);
     }
-  }, [rendered, save, exportName, state.name, state.dictionarySaved, dictionary, notify]);
+  }, [rendered, state.name, dictionary, downloadPair, downloadBundle, notify]);
 
-  const downloadDictionary = useCallback(async (asText) => {
-    if (!Object.keys(dictionary).length) { notify('Todavía no hay nada anonimizado.', true); return; }
-    const saved = asText
-      ? await save(`${state.name}-diccionario.txt`, dictionaryToText(dictionary))
-      : await save(`${state.name}-diccionario.json`, JSON.stringify(dictionary, null, 2));
-    if (saved) { dispatch({ type: 'dictionary-saved' }); notify('Diccionario guardado. No lo subas a la IA.'); }
-  }, [dictionary, state.name, save, notify]);
+  /** Copia el texto de una parte (o del archivo único) para pegarlo en la IA sin descomprimir nada. */
+  const copyPart = useCallback((index = 0) => {
+    const part = rendered[index];
+    if (!part) return;
+    copyText(part.text, rendered.length > 1 ? `La parte ${part.number} de ${rendered.length}` : 'El texto protegido');
+  }, [rendered, copyText]);
 
   const renameEntity = useCallback((id, raw) => {
     const result = renameLabel(entities, id, raw);
@@ -230,6 +225,7 @@ export function useExpediente({ save, notify }) {
     replacements: ready ? applied.replacements : 0, dictionary, suggestions,
     query, search, selectedCount: selected.size, scope, format, split, parts, rendered, outputTokens,
     canExport: ready && blocks.length > 0 && !blocked, timings: state.timings, ackEmpty: state.ackEmpty,
-    actions, loadFile, cancel, download, downloadDictionary, renameEntity, addQueryAsValue
+    receipt: protectedDownload.receipt, downloadDictionaryAgain: protectedDownload.downloadDictionaryAgain,
+    actions, loadFile, cancel, download, copyPart, renameEntity, addQueryAsValue
   };
 }

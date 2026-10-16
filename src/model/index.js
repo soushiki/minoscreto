@@ -10,3 +10,5 @@ export { restoreDocx, restoreText } from './docx/restore.js';
 export { buildDocx } from './docx/builder.js';
 export { DOCX_MIME } from './docx/constants.js';
 export { SAMPLE_NAME, SAMPLE_PARAGRAPHS } from './docx/sample.js';
+export { protectedFileName, dictionaryFileName, dictionaryJson, readDictionaryFrom, safeName } from './protectedFiles.js';
+export { anonymizedText } from './plainText.js';

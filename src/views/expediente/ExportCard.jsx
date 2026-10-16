@@ -1,5 +1,6 @@
 import Segmented from '../../components/Segmented.jsx';
-import { DownloadIcon } from '../../components/Icons.jsx';
+import { CopyIcon, DownloadIcon } from '../../components/Icons.jsx';
+import DownloadReceipt from '../../components/DownloadReceipt.jsx';
 
 const fmt = (n) => Math.round(n).toLocaleString('es-CO');
 const secs = (ms) => (ms === undefined ? '—' : ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`);
@@ -32,7 +33,7 @@ export default function ExportCard({ vm }) {
           <p className="sub">{vm.applying ? 'Aplicando cambios…' : `${fmt(vm.replacements)} reemplazos · ≈ ${fmt(vm.outputTokens)} tokens en total`}</p>
         </div>
         <Segmented label="Formato" value={vm.format} onChange={vm.actions.setFormat}
-          options={[{ value: 'zip', label: 'Partes en ZIP' }, { value: 'md', label: 'Un solo .md' }]} />
+          options={[{ value: 'zip', label: 'En partes' }, { value: 'md', label: 'Un solo archivo' }]} />
       </div>
 
       <div className="xp-opts">
@@ -59,29 +60,39 @@ export default function ExportCard({ vm }) {
 
       {zip && multi && (
         <div className="xp-parts" role="table" aria-label="Partes">
-          <div role="row" className="xp-prow hd"><span role="columnheader">Parte</span><span role="columnheader">{vm.units.title}s</span><span role="columnheader">≈ tokens</span></div>
+          <div role="row" className="xp-prow hd"><span role="columnheader">Parte</span><span role="columnheader">{vm.units.title}s</span><span role="columnheader">≈ tokens</span><span role="columnheader"><span className="sr">Copiar</span></span></div>
           {rendered.map((p, k) => (
             <div role="row" className="xp-prow" key={p.number}>
               <span role="cell">{p.number} de {rendered.length}</span>
               <span role="cell">{p.first === p.last ? p.first : `${p.first}–${p.last}`}</span>
               <span role="cell">{fmt(vm.parts[k]?.tokens ?? 0)}</span>
+              <span role="cell">
+                <button type="button" className="btn sm xp-copy" disabled={!vm.canExport} onClick={() => vm.copyPart(k)}>
+                  <CopyIcon />Copiar parte {p.number} de {rendered.length}
+                </button>
+              </span>
             </div>
           ))}
         </div>
       )}
-      {zip && !multi && rendered.length === 1 && <p className="muted">Cabe en una sola parte: se exporta como un único archivo .md.</p>}
+      {zip && !multi && rendered.length === 1 && <p className="muted">Cabe en una sola parte: se descarga como un único archivo.</p>}
 
       <div className="row-btns xp-dl">
-        <button type="button" className="btn primary" disabled={!vm.canExport} onClick={vm.download}>
-          <DownloadIcon />{multi ? `Descargar ZIP (${rendered.length} partes)` : 'Descargar .md'}
+        <button type="button" className="btn primary" disabled={!vm.canExport} onClick={vm.download}
+          title={multi ? 'Un archivo comprimido con las partes y el diccionario' : 'El texto protegido y su diccionario'}>
+          <DownloadIcon />{multi ? `Descargar (${rendered.length} partes y diccionario)` : 'Descargar'}
         </button>
-        <button type="button" className="btn" disabled={!vm.replacements} onClick={() => vm.downloadDictionary(false)}><DownloadIcon />Diccionario</button>
-        <button type="button" className="btn ghost" disabled={!vm.replacements} onClick={() => vm.downloadDictionary(true)}>.txt</button>
+        {!multi && (
+          <button type="button" className="btn" disabled={!vm.canExport} onClick={() => vm.copyPart(0)}><CopyIcon />Copiar texto para la IA</button>
+        )}
       </div>
-      {vm.blocked && <p className="xp-warn">Antes de exportar, confirma arriba qué hacer con los folios sin texto.</p>}
+      {vm.blocked && <p className="xp-warn">Antes de exportar, confirme arriba qué hacer con los folios sin texto.</p>}
+      <DownloadReceipt receipt={vm.receipt} onDictionaryAgain={vm.downloadDictionaryAgain} />
       <p className="muted">
-        {multi ? 'El ZIP trae las partes en «para-subir-a-la-IA» y el diccionario en «NO-SUBIR». ' : ''}
-        Para restaurar los nombres en la respuesta de la IA, usa la pestaña Restaurar nombres con el diccionario.
+        {multi
+          ? 'Se descarga un solo archivo comprimido: las partes en «para-subir-a-la-IA» y el diccionario en «NO-SUBIR». También puede copiar cada parte y pegarla en la IA. '
+          : 'Se descargan dos archivos: el texto protegido y su diccionario. '}
+        Para recuperar los nombres en la respuesta de la IA, use «Restaurar nombres» con el diccionario.
       </p>
       <p className="xp-times muted">Tiempos: lectura {secs(t.readMs)} · párrafos {secs(t.layoutMs)} · detección {secs(t.detectMs)} · anonimizar {secs(t.applyMs)} · exportar {secs(t.exportMs)}</p>
     </section>

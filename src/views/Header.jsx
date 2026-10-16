@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
-import { BrandMark, DownloadIcon, LockIcon } from '../components/Icons.jsx';
+import { BrandMark, CopyIcon, DownloadIcon, LockIcon } from '../components/Icons.jsx';
 
 export default function Header({ screen, onScreen, onHome, anonymizer }) {
   const ref = useRef(null);
@@ -30,12 +30,12 @@ export default function Header({ screen, onScreen, onHome, anonymizer }) {
           <div className="acts">
             <button type="button" className="btn ghost" disabled={!anonymizer.canUndo} onClick={anonymizer.actions.undo} title="Deshacer (Ctrl+Z)">Deshacer</button>
             <button type="button" className="btn ghost" disabled={!anonymizer.canRedo} onClick={anonymizer.actions.redo} title="Rehacer">Rehacer</button>
-            <button type="button" className="btn" disabled={nothing} onClick={() => anonymizer.downloadDictionary(false)} title="Guarda las llaves y valores originales para restaurarlos después">
-              <DownloadIcon />Diccionario
+            <button type="button" className="btn" disabled={nothing} onClick={anonymizer.copyForAI} title="Copia el texto con las etiquetas, para pegarlo en la IA">
+              <CopyIcon />Copiar texto para la IA
             </button>
-            <button type="button" className="btn ghost" disabled={nothing} onClick={() => anonymizer.downloadDictionary(true)} title="Guardar el diccionario como texto simple LLAVE: VALOR">.txt</button>
-            <button type="button" className="btn primary" disabled={nothing} onClick={anonymizer.downloadDocx}>
-              <DownloadIcon />Descargar Word anonimizado
+            <button type="button" className="btn primary" disabled={nothing} onClick={anonymizer.download}
+              title="Descarga el Word protegido y su diccionario">
+              <DownloadIcon />Descargar
             </button>
           </div>
         )}

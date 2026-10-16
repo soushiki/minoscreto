@@ -214,10 +214,13 @@ describe('división en partes', () => {
     const dictionary = buildDictionary(entities, new Set(applied.usedIds));
     const zip = await JSZip.loadAsync(await buildPartsZip({ name: 'caso', parts: rendered, dictionary, type: 'uint8array' }));
     expect(Object.keys(zip.files).filter((f) => !f.endsWith('/')).sort()).toEqual([
-      'LEEME.txt', 'NO-SUBIR/diccionario.json', 'NO-SUBIR/diccionario.txt',
-      'para-subir-a-la-IA/caso-parte-1-de-3.md', 'para-subir-a-la-IA/caso-parte-2-de-3.md', 'para-subir-a-la-IA/caso-parte-3-de-3.md'
+      'LEAME.txt', 'NO-SUBIR/caso_diccionario.json',
+      'para-subir-a-la-IA/caso_parte-1-de-3.md', 'para-subir-a-la-IA/caso_parte-2-de-3.md', 'para-subir-a-la-IA/caso_parte-3-de-3.md'
     ]);
-    expect(JSON.parse(await zip.file('NO-SUBIR/diccionario.json').async('string'))).toEqual({ '[PERSONA_1]': 'Carlos Andrés Mendoza Ríos' });
+    expect(JSON.parse(await zip.file('NO-SUBIR/caso_diccionario.json').async('string'))).toEqual({ '[PERSONA_1]': 'Carlos Andrés Mendoza Ríos' });
+    const readme = await zip.file('LEAME.txt').async('string');
+    expect(readme).toContain('NUNCA lo suba a la IA');
+    expect(readme).toContain('Recuperar los nombres reales');
   });
 
   it('marca folios sin texto y saltos de una selección', () => {

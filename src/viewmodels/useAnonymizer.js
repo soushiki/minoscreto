@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import {
-  analyze, buildDictionary, buildDocx, dictionaryToText, DocxError, exportAnonymized, findHits,
+  analyze, anonymizedText, buildDictionary, buildDocx, dictionaryFileName, dictionaryJson, DocxError, exportAnonymized, findHits, protectedFileName,
   buildEntities, findSuggestions, openDocx, partLabel, renameLabel, SAMPLE_NAME, SAMPLE_PARAGRAPHS, countMatches
 } from '../model/index.js';
 import { anonymizerReducer, initialState } from './anonymizerState.js';
+import { useProtectedDownload } from './useProtectedDownload.js';
 
 const EMPTY_HITS = { list: [], byParagraph: new Map() };
 const categoriesFlat = (categories) => Object.values(categories).flat();
@@ -11,6 +12,9 @@ const categoriesFlat = (categories) => Object.values(categories).flat();
 export function useAnonymizer({ save, notify }) {
   const [state, dispatch] = useReducer(anonymizerReducer, initialState);
   const { doc, entities, excluded, query, hitIndex } = state;
+  const protectedDownload = useProtectedDownload({ save, notify });
+  const { clear: clearReceipt, downloadPair, copyText } = protectedDownload;
+  useEffect(() => { clearReceipt(); }, [doc, clearReceipt]);
 
   const analysis = useMemo(() => (doc ? analyze(doc.paragraphs, entities, excluded) : null), [doc, entities, excluded]);
   const suggestions = useMemo(() => (doc ? findSuggestions(doc.paragraphs, entities, analysis) : []), [doc, entities, analysis]);
@@ -76,23 +80,24 @@ export function useAnonymizer({ save, notify }) {
     }
   }, [loadBuffer, notify]);
 
-  const downloadDocx = useCallback(async () => {
+  // Un clic: el Word protegido y, medio segundo después, su diccionario. No se puede bajar uno sin el otro.
+  const download = useCallback(async () => {
+    if (!Object.keys(dictionary).length) { notify('Todavía no hay nada anonimizado.', true); return; }
     try {
       const { blob } = await exportAnonymized(state.buffer, entities, excluded);
-      const saved = await save(`${state.name}-anonimizado.docx`, blob);
-      if (saved) notify(state.dictionarySaved ? 'Word anonimizado guardado.' : 'Word guardado. Descarga también el diccionario: sin él no podrás restaurar los nombres.');
+      await downloadPair(
+        { name: protectedFileName(state.name, 'docx'), blob },
+        { name: dictionaryFileName(state.name), text: dictionaryJson(dictionary) }
+      );
     } catch (error) {
       notify(`No se pudo generar el Word: ${error.message}`, true);
     }
-  }, [state.buffer, state.name, state.dictionarySaved, entities, excluded, save, notify]);
+  }, [state.buffer, state.name, entities, excluded, dictionary, downloadPair, notify]);
 
-  const downloadDictionary = useCallback(async (asText) => {
-    if (!Object.keys(dictionary).length) { notify('Todavía no hay nada anonimizado.', true); return; }
-    const saved = asText
-      ? await save(`${state.name}-diccionario.txt`, dictionaryToText(dictionary))
-      : await save(`${state.name}-diccionario.json`, JSON.stringify(dictionary, null, 2));
-    if (saved) { dispatch({ type: 'dictionary-saved' }); notify('Diccionario guardado. Guárdalo aparte del Word anonimizado.'); }
-  }, [dictionary, state.name, save, notify]);
+  const copyForAI = useCallback(() => {
+    if (!analysis) return;
+    copyText(anonymizedText(doc.paragraphs, analysis, entities), 'El texto protegido');
+  }, [doc, analysis, entities, copyText]);
 
   const actions = useMemo(() => ({
     setEntityEnabled: (id, enabled) => dispatch({ type: 'set-entity-enabled', id, enabled }),
@@ -143,6 +148,7 @@ export function useAnonymizer({ save, notify }) {
     openCategories: state.openCategories, popover: state.popover, entityIndex,
     paragraphCount: doc ? doc.paragraphs.filter((p) => p.text.trim()).length : 0,
     enabledCount: entities.filter((e) => e.enabled).length,
-    actions, loadFile, downloadDocx, downloadDictionary, renameEntity, addText, addAliasTo, addQueryAsValue, stepHit
+    receipt: protectedDownload.receipt, downloadDictionaryAgain: protectedDownload.downloadDictionaryAgain,
+    actions, loadFile, download, copyForAI, renameEntity, addText, addAliasTo, addQueryAsValue, stepHit
   };
 }

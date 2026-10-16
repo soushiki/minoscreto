@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { buildDocx, DOCX_MIME, parseDictionary, restoreDocx, restoreText } from '../model/index.js';
+import { buildDocx, DOCX_MIME, readDictionaryFrom, restoreDocx, restoreText } from '../model/index.js';
 
 export function useRestorer({ save, notify }) {
   const [dictionary, setDictionary] = useState(null);
@@ -28,7 +28,8 @@ export function useRestorer({ save, notify }) {
 
   const readDictionaryFile = useCallback(async (file) => {
     if (!file) return;
-    try { loadDictionary(parseDictionary(await file.text()), file.name); }
+    // El diccionario solo (.json o .txt) o el .zip de un expediente en partes, que lo trae dentro.
+    try { loadDictionary(await readDictionaryFrom(await file.arrayBuffer()), file.name); }
     catch (error) { notify(`Diccionario no válido: ${error.message}`, true); }
   }, [loadDictionary, notify]);
 
