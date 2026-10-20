@@ -95,5 +95,8 @@ writeFileSync('.local/expediente-partes.zip', zip);
 writeFileSync('.local/expediente-completo.md', renderWhole({ name: 'expediente', blocks, emptyPages: reduced.emptyPages }));
 console.log(JSON.stringify(report, null, 1));
 if (process.env.DUMP) {
-  console.log(entities.filter((e) => ['NOMBRE', 'LUGAR'].includes(e.type)).map((e) => `${e.label}${e.weak ? ' (débil)' : ''}${e.enabled ? '' : ' (off)'} ${e.value} | ${e.aliases.join('; ')}`).join('\n'));
+  const byType = {};
+  for (const e of entities) byType[e.type + (e.weak ? ' (débil)' : '')] = (byType[e.type + (e.weak ? ' (débil)' : '')] || 0) + 1;
+  console.log(JSON.stringify(byType));
+  console.log(entities.filter((e) => ['NOMBRE', 'LUGAR', 'DIRECCION'].includes(e.type) || e.weak).map((e) => `${e.label}${e.weak ? ' (débil)' : ''}${e.enabled ? '' : ' (off)'} ${e.value} | ${e.aliases.join('; ')}`).join('\n'));
 }

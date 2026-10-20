@@ -22,10 +22,10 @@ export default function SuggestionsPanel({ vm }) {
       )}
       {names.length > 0 && (
         <>
-          <h2 className={`h${vm.suggestions.length ? ' sg-next' : ''}`}>¿Es un nombre propio?</h2>
-          <p className="muted">Palabras con mayúscula que podrían ser el nombre de un proyecto, lugar o marca. Revíselas.</p>
+          <h2 className={`h${vm.suggestions.length ? ' sg-next' : ''}`}>¿Es un nombre?</h2>
+          <p className="muted">Podrían ser el nombre de una persona, un proyecto, un lugar o una marca. Revíselas.</p>
           {names.map((n) => (
-            <div className="sg-row t-NOMBRE" key={n.id}>
+            <div className={`sg-row t-${n.type}`} key={n.id}>
               <span><strong>{n.value}</strong> · {n.count} {n.count === 1 ? 'vez' : 'veces'}</span>
               <button type="button" className="btn sm" onClick={() => vm.actions.setEntityEnabled(n.id, true)} title={`Reemplazar por [${n.label}]`}>Anonimizar</button>
               <button type="button" className="xbtn" onClick={() => vm.dismissName(n.id)} title="No es un nombre" aria-label={`${n.value} no es un nombre`}>×</button>

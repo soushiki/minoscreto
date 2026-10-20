@@ -21,7 +21,7 @@ export function useAnonymizer({ save, notify }) {
   // Posibles nombres propios con señal débil (al inicio de frase, o una sola vez): se proponen, no se activan solos.
   const nameSuggestions = useMemo(() => entities
     .filter((e) => e.weak && !e.enabled)
-    .map((e) => ({ id: e.id, value: e.value, label: e.label, count: analysis ? analysis.counts[e.id] || 0 : 0 })), [entities, analysis]);
+    .map((e) => ({ id: e.id, type: e.type, value: e.value, label: e.label, count: analysis ? analysis.counts[e.id] || 0 : 0 })), [entities, analysis]);
   const hits = useMemo(() => (doc ? findHits(doc.paragraphs, query) : EMPTY_HITS), [doc, query]);
   const currentHit = hits.list.length ? hits.list[hitIndex % hits.list.length] : null;
 

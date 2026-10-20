@@ -1,5 +1,7 @@
 import { fold } from './text.js';
 import { detectProperNouns } from './properNouns.js';
+import { detectAddresses } from './addresses.js';
+import { detectCaselessNames } from './caselessNames.js';
 import {
   FIRST_NAMES, HONORIFICS, STOP_WORDS, NOT_NAMES, CONNECTORS, ORG_CONNECTORS, ORG_PREFIXES
 } from './lexicon.js';
@@ -21,7 +23,7 @@ const RULES = [
   { type: 'RADICADO', re: /\b\d{23}\b/g },
   { type: 'RADICADO', re: /\b(?:19|20)\d{2}-\d{3,6}(?:-\d{2})?\b/g },
   { type: 'NIT', re: /\b\d{1,3}(?:\.\d{3}){2}-\d\b|\b\d{9,10}-\d\b/g },
-  { type: 'DIRECCION', re: /\b(?:[Cc]alle|[Cc]arrera|[Aa]venida|[Dd]iagonal|[Tt]ransversal|[Cc]ircular|Av\.?|Cra\.?|Cr\.?|Cl\.?|Kr\.?|Kra\.?)\s+\d{1,3}[A-Za-z]?(?:\s+(?:[Bb]is|[Ss]ur|[Nn]orte|[Ee]ste|[Oo]este))?\s*(?:#|[Nn]o\.?|N[°º]\.?)\s*\d{1,3}[A-Za-z]?\s*[-–]\s*\d{1,3}(?:,\s*(?:[Bb]arrio|[Cc]onjunto|[Ee]dificio|[Uu]rbanizaci[oó]n|[Cc]onj\.?)\s+[A-ZÁÉÍÓÚÑ][\p{L}]*(?:\s+[A-ZÁÉÍÓÚÑ][\p{L}]*){0,3})?/gu },
+  // Las direcciones las marca detectAddresses (addresses.js), antes de estas reglas.
   { type: 'TELEFONO', re: /(?:\+?57[\s-]?)?\b3\d{2}[\s.-]?\d{3}[\s.-]?\d{4}\b|\(?\b60[1-8]\)?[\s-]?\d{3}[\s-]?\d{4}\b/g },
   { type: 'FECHA', re: new RegExp('\\b\\d{1,2}\\s+de\\s+(?:' + MONTHS + ')(?:\\s+(?:de|del)\\s+\\d{4})?', 'giu') },
   { type: 'FECHA', re: /\b\d{1,2}[/.-]\d{1,2}[/.-](?:\d{4}|\d{2})\b/g },
@@ -139,6 +141,8 @@ function detectPeopleAndPrefixedOrgs(text, claims) {
       }
     }
 
+    // Los nombres en MAYÚSCULAS los busca detectCaselessNames con listas de apellidos: aquí darían falsos positivos («LUZ VERDE PARA…»).
+    if (words.slice(a, b + 1).every((w) => w.w.length > 1 && w.w === w.w.toUpperCase())) continue;
     while (a <= b && HONORIFICS.has(fold(words[a].w))) { honorific = true; a++; }
     if (!honorific && a > 0 && a === runStart) {
       const prev = words[a - 1];
@@ -167,9 +171,11 @@ function detectPeopleAndPrefixedOrgs(text, claims) {
 /** Con `context` (de buildNameContext, todo el documento) también busca nombres propios y lugares. */
 export function detect(text, context = null) {
   const claims = makeClaims(text.length);
+  detectAddresses(text, claims);
   detectByPattern(text, claims);
   detectCompanies(text, claims);
   detectPeopleAndPrefixedOrgs(text, claims);
+  for (const d of detectCaselessNames(text, claims.isFree)) claims.claim(d.start, d.end, 'PERSONA', d.weak ? { weak: true } : undefined);
   if (context) {
     for (const d of detectProperNouns(text, claims.isFree, context)) {
       if (claims.isFree(d.start, d.end)) claims.claim(d.start, d.end, d.type, d.weak ? { weak: true } : undefined);
