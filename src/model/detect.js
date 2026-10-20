@@ -1,13 +1,15 @@
 import { fold } from './text.js';
 import { detectProperNouns } from './properNouns.js';
 import { detectAddresses } from './addresses.js';
-import { detectCaselessNames } from './caselessNames.js';
+import { detectCaselessNames, detectUpperNames } from './caselessNames.js';
 import {
-  FIRST_NAMES, HONORIFICS, STOP_WORDS, NOT_NAMES, CONNECTORS, ORG_CONNECTORS, ORG_PREFIXES
+  FIRST_NAMES, HONORIFICS, STOP_WORDS, NOT_NAMES, CONNECTORS, ORG_CONNECTORS, ORG_PREFIXES, ROLE_WORDS, SURNAMES, COMMON_CAPS,
+  INSTITUTION_WORDS, PLACES, NAME_CUES, SENTENCE_STARTERS
 } from './lexicon.js';
 
 const MONTHS = 'enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre';
-const NUMBER_LABEL = '(?:\\s*(?:No\\.?|N[°º]\\.?|núm(?:ero)?\\.?|#))?\\s*:?\\s*';
+// «No.», «Nro.», «N°», «N 1.234.567», «número», «#», con «-» antes («CC - No. 71234567») y «:» opcional.
+const NUMBER_LABEL = '(?:\\s*[-–]\\s*)?(?:\\s*(?:No\\.?|Nro\\.?|N[°º]\\.?|N(?=\\s*\\d)|núm(?:ero)?\\.?|#))?\\s*:?\\s*';
 const SUFFIX = '(?:S\\.\\s?A\\.\\s?S\\.?|SAS|S\\.\\s?A\\.|S\\.\\s?en\\s+C\\.|S\\.\\s?C\\.\\s?A\\.|E\\.\\s?U\\.|E\\.S\\.P\\.|LTDA\\.?|Ltda\\.?)';
 const COMPANY_SUFFIX = new RegExp('(?<![\\p{L}\\p{N}])' + SUFFIX + '(?![\\p{L}\\p{N}])', 'gu');
 export const COMPANY_SUFFIX_AT_END = new RegExp('[\\s,]*' + SUFFIX + '\\s*$', 'u');
@@ -17,8 +19,8 @@ const PLATE_IGNORED = /^(NIT|ART|CRA|CLL|TEL|CEL|NUM|FOL|PAR|EST|SAS|CIA|COP|USD
 const RULES = [
   { type: 'CORREO', re: /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.[\p{L}]{2,}/gu },
   { type: 'NIT', group: 1, re: new RegExp('\\bNIT\\.?' + NUMBER_LABEL + '(\\d{1,3}(?:\\.\\d{3}){1,2}(?:-\\d)?|\\d{8,10}(?:-\\d)?)', 'giu') },
-  { type: 'CEDULA', group: 1, re: new RegExp('(?:\\bC\\.?\\s?C\\.?|\\bC\\.?\\s?E\\.?|\\bT\\.?\\s?I\\.?|\\bc[ée]dula(?:\\s+de\\s+(?:ciudadan[ií]a|extranjer[ií]a))?|\\bpasaporte|\\bidentificad[oa]\\s+con)' + NUMBER_LABEL + '(\\d{1,3}(?:\\.\\d{3}){1,3}(?!\\d)|\\d{6,10}(?!\\d))', 'giu') },
-  { type: 'CUENTA', group: 1, re: new RegExp('(?:\\b[Cc]uenta(?:\\s+(?:de\\s+ahorros|corriente|bancaria|de\\s+n[oó]mina))?|\\b[Cc]ta\\.?(?:\\s+(?:cte|ahorros))?)(?:\\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,2}' + NUMBER_LABEL + '(\\d[\\d-]{6,20}\\d)', 'gu') },
+  { type: 'CEDULA', group: 1, re: new RegExp('(?:\\bC\\.?\\s?C\\.?|\\bC\\.?\\s?E\\.?|\\bT\\.?\\s?I\\.?|\\bc[ée]dula(?:\\s+de\\s+(?:ciudadan[ií]?a|extranjer[ií]a))?|\\bpasaporte|\\bidentificad[oa]\\s+con)' + NUMBER_LABEL + '(\\d{1,3}(?:\\.\\d{3}){1,3}(?!\\d)|\\d{1,3}(?:,\\d{3}){2,3}(?!\\d|,\\d)|\\d{6,10}(?!\\d))', 'giu') },
+  { type: 'CUENTA', group: 1, re: new RegExp('(?:\\b[Cc]uenta(?:\\s+(?:de\\s+ahorros|corriente|bancaria|de\\s+n[oó]mina))?|\\b[Cc]ta\\.?(?:\\s+(?:cte|ahorros))?)(?:\\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,2}' + NUMBER_LABEL + '(\\d[\\d-]{6,20}\\d)', 'giu') },
   { type: 'TELEFONO', group: 1, re: new RegExp('(?:\\b[Tt]el(?:[ée]fono)?|\\b[Cc]el(?:ular)?|\\b[Mm][oó]vil|\\b[Ww]hats[Aa]pp)\\.?\\s*:?\\s*(\\+?[\\d\\s()-]{7,18}\\d)', 'gu') },
   { type: 'RADICADO', re: /\b\d{23}\b/g },
   { type: 'RADICADO', re: /\b(?:19|20)\d{2}-\d{3,6}(?:-\d{2})?\b/g },
@@ -118,6 +120,19 @@ function capitalizedRuns(text, words) {
   return runs;
 }
 
+const surnameLike = (f) => SURNAMES.has(f) || !(FIRST_NAMES.has(f) || STOP_WORDS.has(f) || COMMON_CAPS.has(f) || INSTITUTION_WORDS.has(f)
+  || HONORIFICS.has(f) || ROLE_WORDS.has(f) || NOT_NAMES.has(f) || PLACES.has(f) || NAME_CUES.has(f) || SENTENCE_STARTERS.has(f) || CONNECTORS.has(f));
+
+/** Índice desde donde empiezan los apellidos escritos antes del nombre de pila (en words[a]); a si no hay. */
+function surnamesBefore(words, a, runStart, b) {
+  const lead = Math.max(runStart, a - 2);
+  if (lead >= a) return a;
+  const before = words.slice(lead, a).map((w) => fold(w.w));
+  if (!before.every(surnameLike)) return a;
+  const onlyFirstNames = words.slice(a, b + 1).every((w) => FIRST_NAMES.has(fold(w.w)) || CONNECTORS.has(fold(w.w)));
+  return before.some((f) => SURNAMES.has(f)) || onlyFirstNames ? lead : a;
+}
+
 function detectPeopleAndPrefixedOrgs(text, claims) {
   const words = [];
   const re = /[\p{L}][\p{L}'’-]*/gu;
@@ -156,15 +171,20 @@ function detectPeopleAndPrefixedOrgs(text, claims) {
     }
     let cut = b;
     for (let y = a + 1; y <= b; y++) {
-      if (STOP_WORDS.has(fold(words[y].w))) { cut = y - 1; break; }
+      if (STOP_WORDS.has(fold(words[y].w)) || ROLE_WORDS.has(fold(words[y].w))) { cut = y - 1; break; }
     }
     b = cut;
     while (b >= a && CONNECTORS.has(fold(words[b].w))) b--;
     if (b < a) continue;
     const firstWord = fold(words[a].w);
     const count = b - a + 1;
-    const isName = (FIRST_NAMES.has(firstWord) && (count >= 2 || honorific)) || (honorific && !NOT_NAMES.has(firstWord));
-    if (isName && claims.isFree(words[a].s, words[b].e)) claims.claim(words[a].s, words[b].e, 'PERSONA');
+    // Apellidos primero («Montenegro Ríos Lucía Fernanda», en listas y formularios): las 1 o 2 palabras de antes del nombre de pila
+    // se suman si alguna es un apellido conocido o si después solo vienen nombres de pila.
+    const lead = honorific ? a : surnamesBefore(words, a, runStart, b);
+    const isName = (FIRST_NAMES.has(firstWord) && (count >= 2 || honorific || a - lead === 2)) || (honorific && !NOT_NAMES.has(firstWord));
+    if (!isName) continue;
+    if (lead < a && claims.isFree(words[lead].s, words[b].e)) a = lead;
+    if (claims.isFree(words[a].s, words[b].e)) claims.claim(words[a].s, words[b].e, 'PERSONA');
   }
 }
 
@@ -175,6 +195,7 @@ export function detect(text, context = null) {
   detectByPattern(text, claims);
   detectCompanies(text, claims);
   detectPeopleAndPrefixedOrgs(text, claims);
+  for (const d of detectUpperNames(text, claims.isFree)) claims.claim(d.start, d.end, 'PERSONA');
   for (const d of detectCaselessNames(text, claims.isFree)) claims.claim(d.start, d.end, 'PERSONA', d.weak ? { weak: true } : undefined);
   if (context) {
     for (const d of detectProperNouns(text, claims.isFree, context)) {

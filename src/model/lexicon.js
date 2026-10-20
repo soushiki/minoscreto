@@ -37,7 +37,7 @@ considerando considerandos resuelve antecedentes hechos pretensiones pruebas fun
 usted ustedes senoria excelencia dios santo santa san virgen
 lunes martes miercoles jueves viernes sabado domingo enero febrero marzo abril mayo junio julio agosto septiembre setiembre octubre noviembre diciembre
 pesos dolares euros moneda legal vigente iva pagina paginas hoja hojas
-calle calles carrera carreras avenida diagonal transversal circular kilometro manzana casa apartamento apto local piso bloque etapa interior via autopista`);
+plaza calle calles carrera carreras avenida diagonal transversal circular kilometro manzana casa apartamento apto local piso bloque etapa interior via autopista`);
 
 // Al comienzo de una frase casi cualquier palabra va con mayúscula: estas nunca son nombres.
 export const SENTENCE_STARTERS = set(`para por con sin mediante conforme segun durante desde hasta cuando como donde si no que este esta estos estas ese esa
@@ -70,3 +70,56 @@ rendon salcedo sarmiento sepulveda tobon useche vallejo valero velandia vidal vi
 
 // Nombres de pila que también son palabras comunes: en minúscula, sin otra pista, solo se sugieren.
 export const AMBIGUOUS_FIRST_NAMES = set('luz rosa pilar dora blanca clara esperanza mercedes consuelo amparo angela pastor rocio gloria victoria sol paz cruz rene martin lady ruby stella');
+
+// Más nombres de pila y apellidos frecuentes en Colombia: amplían FIRST_NAMES y SURNAMES para los nombres en MAYÚSCULAS.
+for (const w of set(`abel adolfo adrian agustin alberto alexander alexis alfonso alfredo alirio amilcar andersson anderson antonio ariel
+arley arnulfo bairon benjamin boris brayan bryan cristhian christian cristobal dagoberto dairo damian dario deiby didier dilan edinson edison
+efrain elias eliecer emilio eider evaristo ezequiel fabio faber farid fidel flavio franklin freddy gabriel gerson gonzalo harvey heriberto hernando
+holman horacio ignacio isaac isidro ismael jacobo jader jefferson jeison jesid jhony joaquin johan jonatan jonathan jose josue julian
+ kelvin leandro leonel libardo lisandro lorenzo marcos mariano marino maximiliano milton moises nelson neftali norberto octavio olmer
+orlando osvaldo oswaldo patricio ramiro reinaldo rigoberto robinson rolando ronald rosendo saul silvio teodoro uriel
+vladimir walter wilmer wilfredo wilber yamid yeison yesid yimmy yovany alba alexandra alix amalia angelica antonia araceli astrid aura 
+ berta brenda briyith carla cindy constanza deisy delia diana dayana dalia doris edith elsa elvira emilce erika estela estefania
+estephanie fabiola fernanda francy gisela graciela heidy helena hilda ingrid irene isabela ivonne jackeline jacqueline janeth jenny
+jessica johanna josefina judith julieta karina katherin kelly lady leonor leydi lilia lilian lilibeth lizeth lucero luisa luz madeleine magaly
+maira marcela marian maritza marleny mayerly melba mery milena mireya nathalia neidy nelly nidia noemi nury pamela rebeca
+rosalba roxana ruth sabrina samanta sharon shirley sindy solangie sulay tania valeria vanesa viviana yadira yamile yaneth yazmin
+yenny yerlis yesenia yina yudy yulieth yully zoraida`)) FIRST_NAMES.add(w);
+
+for (const w of set(`abello abril acevedo aguirre albarracin alarcon almanza alonso alvarado amador andrade angulo aponte aragon arboleda arcila
+arenas arevalo arismendi arrieta arteaga ayala baena ballesteros baquero barbosa barragan barreto barrios bautista becerra bedoya bejarano
+bello benavides bermeo bonilla borja botero bueno bustamante caballero cabezas cadena calle camargo campos canas cantor caro carmona carranza
+carrillo casas castaneda castellanos castilla cepeda cerquera chavez cordoba corredor cortes cubillos cuesta davila diez
+dominguez echeverry enriquez espitia esquivel fandino farfan fernandez ferreira figueroa fuentes gallardo galindo gamboa gamez garces
+gaona gil godoy gordillo grajales guarin guerra guerrero gutierrez guzman heredia herrera higuera hincapie holguin huertas ibanez jaimes jaramillo
+ lasso lemos leal leguizamon lizarazo lopera lozada lugo macias manjarres mantilla marmolejo mateus matiz mesa millan
+miranda molina monsalve montano montenegro montero monroy moncada mosquera munera murcia nieto noguera novoa obando olarte oliveros orjuela
+ospina osorio otero paez palacio palomino paredes pardo parada pastrana penagos penaloza pereira pimiento pinilla pinto polanco polo porras
+portilla puentes puerta quintero quinonez quiroz ramirez rangel restrepo reyes rico robayo robles rocha rodas roldan rosero rozo salamanca
+salgado samper sanabria santamaria santana santacruz segura serrano solarte sotelo suaza tapias tirado tobar toledo torres trujillo
+umana urbano urrea valbuena valdes valdez varela vela velandia vera vesga villalba villamil villarreal villota yanez zabala zamora`)) SURNAMES.add(w);
+
+// Cargos y palabras que van junto a un nombre en MAYÚSCULAS sin ser parte de él (firmas, encabezados de formularios).
+export const ROLE_WORDS = set(`magistrado magistrada conjuez conjueza ponente presidente presidenta vicepresidente secretario secretaria gerente
+contratista contratante supervisor supervisora interventor cedente cesionario demandante demandado demandada accionante accionado accionada
+apoderado apoderada representante oficial mayor juez jueza fiscal procurador procuradora profesional universitario especializado asesor asesora
+coordinador coordinadora director directora jefe arrendador arrendatario vendedor comprador testigo firma firmado elaboro reviso aprobo proyecto
+nombre nombres apellidos contribuyente afiliado cotizante beneficiario titular poderdante otorgante aceptante deudor codeudor`);
+
+// Más comienzos de instituciones, normas, cargos y publicaciones («Sistema General de…», «Pacto Internacional…»,
+// «Administradora de Fondos…», «Partido Verde»): un nombre propio que empieza así no es un dato de alguien.
+for (const w of set(`sistema sistemas pacto convencion convenciones declaracion carta academia facultad facultades escuela observatorio
+ ministros procuradores administradora administradoras caja
+regimen titulo capitulo libro seccion subseccion subdireccion subdirecciones funcion funciones gaceta reglamento partido movimiento concejo
+plenaria plenarias honorables real editorial revista libreria edicion informe constancia intervencion presupuesto tesoro puntos liga
+secretarias comisiones agentes acto diarios diario altas alta maximo derecho derechos 
+ representantes`)) INSTITUTION_WORDS.add(w);
+
+// Vocabulario de formularios y documentos que va con mayúscula («Valor», «Tipo Persona», «Total Afiliados», «Prórroga»):
+// palabras comunes, no nombres.
+for (const w of set(`valor valores tipo total totales forma aporte aportes numero nombre nombres apellidos periodo registro certificado
+certificacion resumen rubro prorroga terminacion inicio respuesta gestion manual modelo formato prestacion persona ingreso entidades procesos
+obligaciones solucion mecanismos riesgos reunion cotizacion afiliado afiliados saldo porcentaje ejecutado aplica exonerado codigo version
+financiero financiera concepto tema consideracion novedades identificacion haga clic definir equipo gestor taller actividad actividades
+anexo observaciones descripcion fecha fechas cargo area dependencia firma razon social conciliar cargar marcar desmarcar imprimir extracto
+jan feb mar apr may jun jul aug sep oct nov dec ene abr ago dic`)) COMMON_CAPS.add(w);

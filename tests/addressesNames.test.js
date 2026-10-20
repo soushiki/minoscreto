@@ -96,3 +96,72 @@ describe('nombres que no van en «Tipo Título»', () => {
     expect(ents.find((e) => e.type === 'PERSONA')).toMatchObject({ value: 'juan carlos', weak: true, enabled: false });
   });
 });
+
+describe('nombres en MAYÚSCULAS con nombres o apellidos menos comunes', () => {
+  it('con dos palabras de nombre conocidas, aunque el resto no esté en las listas', () => {
+    expect(people('Entre los suscritos, YOLIMA ESTHER BRICEÑO CASAS, mayor de edad,')).toEqual([['YOLIMA ESTHER BRICEÑO CASAS', 'fuerte']]);
+    expect(people('y por la otra HERNANDO TULIO ZAPATA OBREGÓN, identificado con cédula')).toEqual([['HERNANDO TULIO ZAPATA OBREGÓN', 'fuerte']]);
+  });
+
+  it('con un tratamiento o una pista aunque ninguna palabra esté en las listas', () => {
+    expect(people('se reunieron la sra. GRISELDA PAMPLONA ORDUZ y el sr. TEÓFILO ACUÑA')).toEqual([['GRISELDA PAMPLONA ORDUZ', 'fuerte'], ['TEÓFILO ACUÑA', 'fuerte']]);
+    expect(people('CONTRATISTA: YURANI TATIANA ESCALANTE BOHÓRQUEZ')).toEqual([['YURANI TATIANA ESCALANTE BOHÓRQUEZ', 'fuerte']]);
+    expect(people('XIMENO ZAMBRANO ULLOA identificado con C.C. 1.234.567')).toEqual([['XIMENO ZAMBRANO ULLOA', 'fuerte']]);
+  });
+
+  it('en bloques de firma, sin tomar el cargo', () => {
+    expect(people('Con salvamento de voto HORTENSIA ÁVILA CÁRDENAS Magistrada GONZALO ESTUPIÑÁN RUEDA Magistrado'))
+      .toEqual([['HORTENSIA ÁVILA CÁRDENAS', 'fuerte'], ['GONZALO ESTUPIÑÁN RUEDA', 'fuerte']]);
+    expect(people('Firma RAMIRO ALFONSO PEÑA LUGO PROFESIONAL UNIVERSITARIO DIRECCIÓN TÉCNICA')).toEqual([['RAMIRO ALFONSO PEÑA LUGO', 'fuerte']]);
+  });
+
+  it('no toma encabezados ni frases en MAYÚSCULAS', () => {
+    for (const text of [
+      'NOMBRE DEL PROYECTO DE INVERSIÓN: IMPLEMENTACIÓN DE LA POLÍTICA PÚBLICA', 'DISPOSICIÓN JURÍDICA Y NORMA JURÍDICA',
+      'PRESTACIÓN DE SERVICIOS PROFESIONALES COMO ABOGADA EN LA EMPRESA MUNICIPAL', 'VALOR DIECIOCHO MILLONES DE PESOS',
+      'DIRECCIÓN TÉCNICA DE SEGURIDAD', 'CERTIFICADO DE CUMPLIMIENTO E INFORMES DE SUPERVISIÓN'
+    ]) {
+      expect(people(text), text).toEqual([]);
+    }
+  });
+});
+
+describe('nombres con los apellidos primero', () => {
+  it('en listas y formularios en tipo título', () => {
+    expect(people('3. Montenegro Ríos Lucía Fernanda')).toEqual([['Montenegro Ríos Lucía Fernanda', 'fuerte']]);
+    expect(people('8. Quintana Bastidas Rubén')).toEqual([['Quintana Bastidas Rubén', 'fuerte']]);
+  });
+
+  it('en MAYÚSCULAS, como en planillas y certificados', () => {
+    expect(people('Nombre completo del Contratista: GALEANO PERDOMO ROSA ELVIRA')).toEqual([['GALEANO PERDOMO ROSA ELVIRA', 'fuerte']]);
+    expect(people('1 CC 12345678 TORRES BALLÉN EUDORO 30 0 N')).toEqual([['TORRES BALLÉN EUDORO', 'fuerte']]);
+  });
+
+  it('no suma palabras de instituciones o cargos antes del nombre', () => {
+    expect(people('El Consejo Superior Teodoro')).toEqual([]);
+    expect(people('la Corte Suprema de Justicia María Fernanda Gómez')).toEqual([['María Fernanda Gómez', 'fuerte']]);
+    expect(people('PLAZA DE MERCADO CENTRAL')).toEqual([]);
+  });
+});
+
+describe('otros formatos de cédula y cuenta', () => {
+  const found = (text, type) => detect(text).filter((d) => d.type === type).map((d) => text.slice(d.start, d.end));
+
+  it.each([
+    ['identificado con cédula de ciudadanía N 1.098.765.432 expedida en Pasto', '1.098.765.432'],
+    ['identificada con cédula de ciudadana N°1.098.765.432 actuando', '1.098.765.432'],
+    ['identificado con cédula de ciudadanía NO 71,234,567, mayor de edad', '71,234,567'],
+    ['Tipo de identificación: CC - No. 71234567 Nombre', '71234567'],
+    ['C.C. Nro. 71.234.567 de Ibagué', '71.234.567']
+  ])('cédula en «%s»', (text, number) => {
+    expect(found(text, 'CEDULA')).toEqual([number]);
+  });
+
+  it('cuenta con la palabra en MAYÚSCULAS', () => {
+    expect(found('TIPO DE CUENTA: AHORROS N° CUENTA: 004500123456', 'CUENTA')).toEqual(['004500123456']);
+  });
+
+  it('no toma montos ni normas como cédulas', () => {
+    expect(found('pagó $ 1,250,000 pesos según la Ley N 1150 de 2007', 'CEDULA')).toEqual([]);
+  });
+});
