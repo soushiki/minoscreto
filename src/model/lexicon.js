@@ -37,7 +37,7 @@ considerando considerandos resuelve antecedentes hechos pretensiones pruebas fun
 usted ustedes senoria excelencia dios santo santa san virgen
 lunes martes miercoles jueves viernes sabado domingo enero febrero marzo abril mayo junio julio agosto septiembre setiembre octubre noviembre diciembre
 pesos dolares euros moneda legal vigente iva pagina paginas hoja hojas
-calle calles carrera carreras avenida diagonal transversal circular kilometro manzana casa apartamento apto local piso bloque etapa interior via autopista`);
+plaza calle calles carrera carreras avenida diagonal transversal circular kilometro manzana casa apartamento apto local piso bloque etapa interior via autopista`);
 
 // Al comienzo de una frase casi cualquier palabra va con mayúscula: estas nunca son nombres.
 export const SENTENCE_STARTERS = set(`para por con sin mediante conforme segun durante desde hasta cuando como donde si no que este esta estos estas ese esa

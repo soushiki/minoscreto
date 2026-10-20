@@ -125,3 +125,21 @@ describe('nombres en MAYÚSCULAS con nombres o apellidos menos comunes', () => {
     }
   });
 });
+
+describe('nombres con los apellidos primero', () => {
+  it('en listas y formularios en tipo título', () => {
+    expect(people('3. Montenegro Ríos Lucía Fernanda')).toEqual([['Montenegro Ríos Lucía Fernanda', 'fuerte']]);
+    expect(people('8. Quintana Bastidas Rubén')).toEqual([['Quintana Bastidas Rubén', 'fuerte']]);
+  });
+
+  it('en MAYÚSCULAS, como en planillas y certificados', () => {
+    expect(people('Nombre completo del Contratista: GALEANO PERDOMO ROSA ELVIRA')).toEqual([['GALEANO PERDOMO ROSA ELVIRA', 'fuerte']]);
+    expect(people('1 CC 12345678 TORRES BALLÉN EUDORO 30 0 N')).toEqual([['TORRES BALLÉN EUDORO', 'fuerte']]);
+  });
+
+  it('no suma palabras de instituciones o cargos antes del nombre', () => {
+    expect(people('El Consejo Superior Teodoro')).toEqual([]);
+    expect(people('la Corte Suprema de Justicia María Fernanda Gómez')).toEqual([['María Fernanda Gómez', 'fuerte']]);
+    expect(people('PLAZA DE MERCADO CENTRAL')).toEqual([]);
+  });
+});
