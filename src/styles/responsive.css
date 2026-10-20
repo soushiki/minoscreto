@@ -30,6 +30,8 @@
 
   input, select, textarea { font-size: 16px; }
   .qrow .btn, .qadd .btn { min-height: 42px; }
+  .card-sugg .btn { min-height: 40px; }
+  .card-sugg .xbtn { min-width: 40px; min-height: 40px; }
   .qrow input { padding: 10px 12px; }
   .qadd { flex-wrap: wrap; }
   .qadd .btn { flex: 1 1 100%; }

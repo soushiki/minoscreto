@@ -54,3 +54,19 @@ sincelejo valledupar tunja riohacha quibdo florencia yopal leticia soacha bello 
 santa marta indias caribe antioquia cundinamarca valle cauca atlantico bolivar santander boyaca narino cordoba huila
 tolima meta caldas risaralda quindio sucre magdalena guajira choco caqueta casanare putumayo arauca amazonas guaviare vaupes vichada
 miami madrid nueva york panama`);
+
+// Apellidos frecuentes en Colombia (sin tildes): con FIRST_NAMES reconocen nombres escritos en MAYÚSCULAS o en minúsculas.
+export const SURNAMES = set(`rodriguez gomez gonzalez martinez garcia lopez hernandez sanchez ramirez perez diaz munoz rojas moreno jimenez torres alvarez
+ruiz castro vargas gutierrez suarez romero herrera ortiz valencia castillo morales gil restrepo cardenas ospina rincon salazar mendoza rios quintero
+salas mejia arango henao velez giraldo londono zapata duque castano ortega pena gaitan cardona marin ocampo correa osorio agudelo arias betancur
+betancourt bermudez buitrago cano carvajal contreras cortes cruz delgado escobar espinosa espinoza estrada florez flores franco gallego galvis guerrero
+guzman hoyos jaramillo leon lozano medina mora murillo navarro nino nunez orozco pardo parra patino pineda pinzon posada pulido quiroga ramos reyes
+rivera rubio santos serna sierra silva sosa soto tamayo tovar trujillo uribe valderrama vasquez vazquez vega velasquez villa villamizar zuluaga
+acosta aguilar alzate amaya avila beltran bernal blanco bravo bustos caicedo calderon camacho campo cifuentes cuellar daza duarte fajardo forero
+fonseca garzon guevara hurtado ibarra lara linares luna marquez mendez montoya mosquera narvaez neira ochoa olaya palacios pacheco perea plata
+prieto puentes rueda saavedra sandoval solano tellez toro urrego vanegas vergara yepes barrera benitez cabrera chaparro cuervo echeverri gaviria
+granados lemus maldonado manrique mendivelso meneses mercado mondragon montes naranjo ordonez otalora pabon pedraza pena pertuz pizarro quintana
+rendon salcedo sarmiento sepulveda tobon useche vallejo valero velandia vidal villegas zambrano zarate`);
+
+// Nombres de pila que también son palabras comunes: en minúscula, sin otra pista, solo se sugieren.
+export const AMBIGUOUS_FIRST_NAMES = set('luz rosa pilar dora blanca clara esperanza mercedes consuelo amparo angela pastor rocio gloria victoria sol paz cruz rene martin lady ruby stella');
