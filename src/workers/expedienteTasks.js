@@ -14,7 +14,7 @@ function prepare({ pages, paragraphs }) {
   const layoutMs = now() - t;
   t = now();
   // La versión completa ya une los párrafos que cruzan de folio y conserva encabezados: ve todos los datos.
-  const entities = tidyEntities(buildEntities(full.paragraphs));
+  const entities = tidyEntities(buildEntities(full.paragraphs, { hints: full.hints || [] }));
   return { full, reduced, entities, layoutMs, detectMs: now() - t };
 }
 

@@ -11,6 +11,7 @@ export const SCORES = {
   caselessName: 0.75,
   nitChecked: 0.85, // NIT sin la palabra «NIT» cuyo dígito de verificación cuadra
   bareNumber: 0.75, // teléfono o radicado por su forma
+  layout: 0.8, // número en una columna de tabla con encabezado de ese tipo, o nombre en un bloque de firma
   properNoun: 0.6,
   plate: 0.6,
   weak: 0.35, // señal débil: solo se sugiere
