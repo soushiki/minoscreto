@@ -17,6 +17,7 @@ const PLACE_CUE = /(?:^|\s)(?:vereda|corregimiento|municipio|barrio|sector|local
 const OPEN_QUOTE = /[«"“'‘]\s*$/u;
 const CLOSE_QUOTE = /^\s*[»"”'’]/u;
 const NOT_A_NAME_ENDING = /(?:mente|ndo|ados?|adas?|idos?|idas?)$/u;
+const COMMON_NOUN_ENDING = /(?:cion|ciones|sion|siones|dad|dades|miento|mientos|ante|antes|ente|entes|ias|ista|istas|ivo|iva|ura|uras|ismo|ario|aria|orio|oria|ancia|encia|al|ales)$/u;
 
 const isUpperWord = (w) => w.length > 1 && w === w.toUpperCase() && w !== w.toLowerCase();
 const startsLower = (w) => w[0] !== w[0].toUpperCase();
@@ -125,6 +126,10 @@ export function detectProperNouns(text, isFree, ctx) {
     const distinctive = named.filter((w) => !generic(w.f, ctx));
     if (!cue && !quoted && !distinctive.length) return;
     if ((cue || quoted) && named.every((w) => COMMON_CAPS.has(w.f) || STOP_WORDS.has(w.f))) return;
+
+    // Una sola palabra con terminación de sustantivo común («Corporación», «Garantías», «Ponente») o de menos de tres letras
+  // (ruido de OCR) sin pista no es un nombre.
+    if (!cue && !quoted && named.length === 1 && (COMMON_NOUN_ENDING.test(named[0].f) || named[0].f.length < 3)) return;
 
     const mid = !(initial && x === a);
     const once = named.length === 1 && (ctx.caps.get(named[0].f) || 0) < 2;
