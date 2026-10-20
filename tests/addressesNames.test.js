@@ -96,3 +96,32 @@ describe('nombres que no van en «Tipo Título»', () => {
     expect(ents.find((e) => e.type === 'PERSONA')).toMatchObject({ value: 'juan carlos', weak: true, enabled: false });
   });
 });
+
+describe('nombres en MAYÚSCULAS con nombres o apellidos menos comunes', () => {
+  it('con dos palabras de nombre conocidas, aunque el resto no esté en las listas', () => {
+    expect(people('Entre los suscritos, YOLIMA ESTHER BRICEÑO CASAS, mayor de edad,')).toEqual([['YOLIMA ESTHER BRICEÑO CASAS', 'fuerte']]);
+    expect(people('y por la otra HERNANDO TULIO ZAPATA OBREGÓN, identificado con cédula')).toEqual([['HERNANDO TULIO ZAPATA OBREGÓN', 'fuerte']]);
+  });
+
+  it('con un tratamiento o una pista aunque ninguna palabra esté en las listas', () => {
+    expect(people('se reunieron la sra. GRISELDA PAMPLONA ORDUZ y el sr. TEÓFILO ACUÑA')).toEqual([['GRISELDA PAMPLONA ORDUZ', 'fuerte'], ['TEÓFILO ACUÑA', 'fuerte']]);
+    expect(people('CONTRATISTA: YURANI TATIANA ESCALANTE BOHÓRQUEZ')).toEqual([['YURANI TATIANA ESCALANTE BOHÓRQUEZ', 'fuerte']]);
+    expect(people('XIMENO ZAMBRANO ULLOA identificado con C.C. 1.234.567')).toEqual([['XIMENO ZAMBRANO ULLOA', 'fuerte']]);
+  });
+
+  it('en bloques de firma, sin tomar el cargo', () => {
+    expect(people('Con salvamento de voto HORTENSIA ÁVILA CÁRDENAS Magistrada GONZALO ESTUPIÑÁN RUEDA Magistrado'))
+      .toEqual([['HORTENSIA ÁVILA CÁRDENAS', 'fuerte'], ['GONZALO ESTUPIÑÁN RUEDA', 'fuerte']]);
+    expect(people('Firma RAMIRO ALFONSO PEÑA LUGO PROFESIONAL UNIVERSITARIO DIRECCIÓN TÉCNICA')).toEqual([['RAMIRO ALFONSO PEÑA LUGO', 'fuerte']]);
+  });
+
+  it('no toma encabezados ni frases en MAYÚSCULAS', () => {
+    for (const text of [
+      'NOMBRE DEL PROYECTO DE INVERSIÓN: IMPLEMENTACIÓN DE LA POLÍTICA PÚBLICA', 'DISPOSICIÓN JURÍDICA Y NORMA JURÍDICA',
+      'PRESTACIÓN DE SERVICIOS PROFESIONALES COMO ABOGADA EN LA EMPRESA MUNICIPAL', 'VALOR DIECIOCHO MILLONES DE PESOS',
+      'DIRECCIÓN TÉCNICA DE SEGURIDAD', 'CERTIFICADO DE CUMPLIMIENTO E INFORMES DE SUPERVISIÓN'
+    ]) {
+      expect(people(text), text).toEqual([]);
+    }
+  });
+});

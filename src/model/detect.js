@@ -1,9 +1,9 @@
 import { fold } from './text.js';
 import { detectProperNouns } from './properNouns.js';
 import { detectAddresses } from './addresses.js';
-import { detectCaselessNames } from './caselessNames.js';
+import { detectCaselessNames, detectUpperNames } from './caselessNames.js';
 import {
-  FIRST_NAMES, HONORIFICS, STOP_WORDS, NOT_NAMES, CONNECTORS, ORG_CONNECTORS, ORG_PREFIXES
+  FIRST_NAMES, HONORIFICS, STOP_WORDS, NOT_NAMES, CONNECTORS, ORG_CONNECTORS, ORG_PREFIXES, ROLE_WORDS
 } from './lexicon.js';
 
 const MONTHS = 'enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre';
@@ -156,7 +156,7 @@ function detectPeopleAndPrefixedOrgs(text, claims) {
     }
     let cut = b;
     for (let y = a + 1; y <= b; y++) {
-      if (STOP_WORDS.has(fold(words[y].w))) { cut = y - 1; break; }
+      if (STOP_WORDS.has(fold(words[y].w)) || ROLE_WORDS.has(fold(words[y].w))) { cut = y - 1; break; }
     }
     b = cut;
     while (b >= a && CONNECTORS.has(fold(words[b].w))) b--;
@@ -175,6 +175,7 @@ export function detect(text, context = null) {
   detectByPattern(text, claims);
   detectCompanies(text, claims);
   detectPeopleAndPrefixedOrgs(text, claims);
+  for (const d of detectUpperNames(text, claims.isFree)) claims.claim(d.start, d.end, 'PERSONA');
   for (const d of detectCaselessNames(text, claims.isFree)) claims.claim(d.start, d.end, 'PERSONA', d.weak ? { weak: true } : undefined);
   if (context) {
     for (const d of detectProperNouns(text, claims.isFree, context)) {
