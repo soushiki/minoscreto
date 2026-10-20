@@ -49,3 +49,30 @@ describe('datos partidos entre párrafos (líneas de OCR, Word convertido)', () 
     for (const leaked of ['HERIBERTO', 'SALCEDO', 'URIBE', '79.456.120']) expect(all).not.toContain(leaked);
   });
 });
+
+describe('datos pegados a letras, guiones bajos o llamadas de nota', () => {
+  const needle = (value) => [{ id: 'x', value, enabled: true }];
+  const spans = (text, value) => findOccurrences(text, needle(value)).map((o) => text.slice(o.start, o.end));
+
+  it('reemplaza la cédula aunque toque letras o guiones bajos', () => {
+    expect(spans('Documento CC71234567 Dirección', '71234567')).toEqual(['71234567']);
+    expect(spans('con cédula No 43.210.987de Envigado', '43.210.987')).toEqual(['43.210.987']);
+    expect(spans('___________43.210.987 de Envigado_______', '43.210.987')).toEqual(['43.210.987']);
+  });
+
+  it('reemplaza un nombre con la llamada de nota pegada', () => {
+    expect(spans('el senador Rigoberto Almeida Paz3, quien', 'Rigoberto Almeida Paz')).toEqual(['Rigoberto Almeida Paz']);
+    expect(spans('usuario RIGOBERTO_ALMEIDA firmó', 'RIGOBERTO')).toEqual(['RIGOBERTO']);
+  });
+
+  it('sigue sin tomar pedazos de palabras o de números más largos', () => {
+    expect(spans('Anabel y Mariana', 'Ana')).toEqual([]);
+    expect(spans('radicado 712345678', '12345678')).toEqual([]);
+    expect(spans('la cédula 1.043.210.987', '43.210.987')).toEqual([]);
+  });
+
+  it('la detección de la página completa reemplaza la cédula pegada', () => {
+    const texts = ['identificado con cédula de ciudadanía No 43.210.987 de Envigado', 'Documento CC43210987', 'FIRMA ___43.210.987___'];
+    expect(hidden(texts, buildEntities(para(texts))).join(' ')).not.toMatch(/43\.?210\.?987/);
+  });
+});
