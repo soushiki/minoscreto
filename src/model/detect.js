@@ -8,7 +8,8 @@ import {
 } from './lexicon.js';
 
 const MONTHS = 'enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre';
-const NUMBER_LABEL = '(?:\\s*(?:No\\.?|N[°º]\\.?|núm(?:ero)?\\.?|#))?\\s*:?\\s*';
+// «No.», «Nro.», «N°», «N 1.234.567», «número», «#», con «-» antes («CC - No. 71234567») y «:» opcional.
+const NUMBER_LABEL = '(?:\\s*[-–]\\s*)?(?:\\s*(?:No\\.?|Nro\\.?|N[°º]\\.?|N(?=\\s*\\d)|núm(?:ero)?\\.?|#))?\\s*:?\\s*';
 const SUFFIX = '(?:S\\.\\s?A\\.\\s?S\\.?|SAS|S\\.\\s?A\\.|S\\.\\s?en\\s+C\\.|S\\.\\s?C\\.\\s?A\\.|E\\.\\s?U\\.|E\\.S\\.P\\.|LTDA\\.?|Ltda\\.?)';
 const COMPANY_SUFFIX = new RegExp('(?<![\\p{L}\\p{N}])' + SUFFIX + '(?![\\p{L}\\p{N}])', 'gu');
 export const COMPANY_SUFFIX_AT_END = new RegExp('[\\s,]*' + SUFFIX + '\\s*$', 'u');
@@ -18,8 +19,8 @@ const PLATE_IGNORED = /^(NIT|ART|CRA|CLL|TEL|CEL|NUM|FOL|PAR|EST|SAS|CIA|COP|USD
 const RULES = [
   { type: 'CORREO', re: /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.[\p{L}]{2,}/gu },
   { type: 'NIT', group: 1, re: new RegExp('\\bNIT\\.?' + NUMBER_LABEL + '(\\d{1,3}(?:\\.\\d{3}){1,2}(?:-\\d)?|\\d{8,10}(?:-\\d)?)', 'giu') },
-  { type: 'CEDULA', group: 1, re: new RegExp('(?:\\bC\\.?\\s?C\\.?|\\bC\\.?\\s?E\\.?|\\bT\\.?\\s?I\\.?|\\bc[ée]dula(?:\\s+de\\s+(?:ciudadan[ií]a|extranjer[ií]a))?|\\bpasaporte|\\bidentificad[oa]\\s+con)' + NUMBER_LABEL + '(\\d{1,3}(?:\\.\\d{3}){1,3}(?!\\d)|\\d{6,10}(?!\\d))', 'giu') },
-  { type: 'CUENTA', group: 1, re: new RegExp('(?:\\b[Cc]uenta(?:\\s+(?:de\\s+ahorros|corriente|bancaria|de\\s+n[oó]mina))?|\\b[Cc]ta\\.?(?:\\s+(?:cte|ahorros))?)(?:\\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,2}' + NUMBER_LABEL + '(\\d[\\d-]{6,20}\\d)', 'gu') },
+  { type: 'CEDULA', group: 1, re: new RegExp('(?:\\bC\\.?\\s?C\\.?|\\bC\\.?\\s?E\\.?|\\bT\\.?\\s?I\\.?|\\bc[ée]dula(?:\\s+de\\s+(?:ciudadan[ií]?a|extranjer[ií]a))?|\\bpasaporte|\\bidentificad[oa]\\s+con)' + NUMBER_LABEL + '(\\d{1,3}(?:\\.\\d{3}){1,3}(?!\\d)|\\d{1,3}(?:,\\d{3}){2,3}(?!\\d|,\\d)|\\d{6,10}(?!\\d))', 'giu') },
+  { type: 'CUENTA', group: 1, re: new RegExp('(?:\\b[Cc]uenta(?:\\s+(?:de\\s+ahorros|corriente|bancaria|de\\s+n[oó]mina))?|\\b[Cc]ta\\.?(?:\\s+(?:cte|ahorros))?)(?:\\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,2}' + NUMBER_LABEL + '(\\d[\\d-]{6,20}\\d)', 'giu') },
   { type: 'TELEFONO', group: 1, re: new RegExp('(?:\\b[Tt]el(?:[ée]fono)?|\\b[Cc]el(?:ular)?|\\b[Mm][oó]vil|\\b[Ww]hats[Aa]pp)\\.?\\s*:?\\s*(\\+?[\\d\\s()-]{7,18}\\d)', 'gu') },
   { type: 'RADICADO', re: /\b\d{23}\b/g },
   { type: 'RADICADO', re: /\b(?:19|20)\d{2}-\d{3,6}(?:-\d{2})?\b/g },

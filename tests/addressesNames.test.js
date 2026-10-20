@@ -143,3 +143,25 @@ describe('nombres con los apellidos primero', () => {
     expect(people('PLAZA DE MERCADO CENTRAL')).toEqual([]);
   });
 });
+
+describe('otros formatos de cédula y cuenta', () => {
+  const found = (text, type) => detect(text).filter((d) => d.type === type).map((d) => text.slice(d.start, d.end));
+
+  it.each([
+    ['identificado con cédula de ciudadanía N 1.098.765.432 expedida en Pasto', '1.098.765.432'],
+    ['identificada con cédula de ciudadana N°1.098.765.432 actuando', '1.098.765.432'],
+    ['identificado con cédula de ciudadanía NO 71,234,567, mayor de edad', '71,234,567'],
+    ['Tipo de identificación: CC - No. 71234567 Nombre', '71234567'],
+    ['C.C. Nro. 71.234.567 de Ibagué', '71.234.567']
+  ])('cédula en «%s»', (text, number) => {
+    expect(found(text, 'CEDULA')).toEqual([number]);
+  });
+
+  it('cuenta con la palabra en MAYÚSCULAS', () => {
+    expect(found('TIPO DE CUENTA: AHORROS N° CUENTA: 004500123456', 'CUENTA')).toEqual(['004500123456']);
+  });
+
+  it('no toma montos ni normas como cédulas', () => {
+    expect(found('pagó $ 1,250,000 pesos según la Ley N 1150 de 2007', 'CEDULA')).toEqual([]);
+  });
+});
