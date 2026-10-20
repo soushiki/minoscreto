@@ -9,6 +9,8 @@ export const TYPES = [
   { id: 'CUENTA', name: 'Cuentas bancarias', single: 'Cuenta', prefix: 'CUENTA', on: true },
   { id: 'RADICADO', name: 'Radicados y referencias', single: 'Radicado', prefix: 'RADICADO', on: true },
   { id: 'PLACA', name: 'Placas de vehículo', single: 'Placa', prefix: 'PLACA', on: true },
+  { id: 'NOMBRE', name: 'Nombres propios', single: 'Nombre propio', prefix: 'NOMBRE', on: true },
+  { id: 'LUGAR', name: 'Países y ciudades', single: 'Lugar', prefix: 'LUGAR', on: false },
   { id: 'FECHA', name: 'Fechas', single: 'Fecha', prefix: 'FECHA', on: false },
   { id: 'MONTO', name: 'Montos', single: 'Monto', prefix: 'MONTO', on: false },
   { id: 'OTRO', name: 'Agregados por ti', single: 'Otro dato', prefix: 'DATO', on: true }

@@ -1,4 +1,5 @@
 import { fold } from './text.js';
+import { detectProperNouns } from './properNouns.js';
 import {
   FIRST_NAMES, HONORIFICS, STOP_WORDS, NOT_NAMES, CONNECTORS, ORG_CONNECTORS, ORG_PREFIXES
 } from './lexicon.js';
@@ -38,7 +39,7 @@ function makeClaims(length) {
   return {
     found,
     isFree: (s, e) => { for (let k = s; k < e; k++) if (taken[k]) return false; return true; },
-    claim(s, e, type) { taken.fill(1, s, e); found.push({ start: s, end: e, type }); }
+    claim(s, e, type, extra) { taken.fill(1, s, e); found.push({ start: s, end: e, type, ...extra }); }
   };
 }
 
@@ -163,10 +164,16 @@ function detectPeopleAndPrefixedOrgs(text, claims) {
   }
 }
 
-export function detect(text) {
+/** Con `context` (de buildNameContext, todo el documento) también busca nombres propios y lugares. */
+export function detect(text, context = null) {
   const claims = makeClaims(text.length);
   detectByPattern(text, claims);
   detectCompanies(text, claims);
   detectPeopleAndPrefixedOrgs(text, claims);
+  if (context) {
+    for (const d of detectProperNouns(text, claims.isFree, context)) {
+      if (claims.isFree(d.start, d.end)) claims.claim(d.start, d.end, d.type, d.weak ? { weak: true } : undefined);
+    }
+  }
   return claims.found.sort((p, q) => p.start - q.start);
 }

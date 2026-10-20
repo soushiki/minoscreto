@@ -72,3 +72,4 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 @keyframes flash { 0% { box-shadow: 0 0 0 4px var(--cur); } 100% { box-shadow: 0 0 0 4px transparent; } }
 .empty { padding: 40px 16px; text-align: center; color: var(--ink2); }
 
+.sg-next { margin-top: 14px; }
