@@ -70,3 +70,38 @@ rendon salcedo sarmiento sepulveda tobon useche vallejo valero velandia vidal vi
 
 // Nombres de pila que también son palabras comunes: en minúscula, sin otra pista, solo se sugieren.
 export const AMBIGUOUS_FIRST_NAMES = set('luz rosa pilar dora blanca clara esperanza mercedes consuelo amparo angela pastor rocio gloria victoria sol paz cruz rene martin lady ruby stella');
+
+// Más nombres de pila y apellidos frecuentes en Colombia: amplían FIRST_NAMES y SURNAMES para los nombres en MAYÚSCULAS.
+for (const w of set(`abel adolfo adrian agustin alberto alexander alexis alfonso alfredo alirio amilcar andersson anderson antonio ariel
+arley arnulfo bairon benjamin boris brayan bryan cristhian christian cristobal dagoberto dairo damian dario deiby didier dilan edinson edison
+efrain elias eliecer emilio eider evaristo ezequiel fabio faber farid fidel flavio franklin freddy gabriel gerson gonzalo harvey heriberto hernando
+holman horacio ignacio isaac isidro ismael jacobo jader jefferson jeison jesid jhony joaquin johan jonatan jonathan jose josue julian
+ kelvin leandro leonel libardo lisandro lorenzo marcos mariano marino maximiliano milton moises nelson neftali norberto octavio olmer
+orlando osvaldo oswaldo patricio ramiro reinaldo rigoberto robinson rolando ronald rosendo saul silvio teodoro uriel
+vladimir walter wilmer wilfredo wilber yamid yeison yesid yimmy yovany alba alexandra alix amalia angelica antonia araceli astrid aura 
+ berta brenda briyith carla cindy constanza deisy delia diana dayana dalia doris edith elsa elvira emilce erika estela estefania
+estephanie fabiola fernanda francy gisela graciela heidy helena hilda ingrid irene isabela ivonne jackeline jacqueline janeth jenny
+jessica johanna josefina judith julieta karina katherin kelly lady leonor leydi lilia lilian lilibeth lizeth lucero luisa luz madeleine magaly
+maira marcela marian maritza marleny mayerly melba mery milena mireya nathalia neidy nelly nidia noemi nury pamela rebeca
+rosalba roxana ruth sabrina samanta sharon shirley sindy solangie sulay tania valeria vanesa viviana yadira yamile yaneth yazmin
+yenny yerlis yesenia yina yudy yulieth yully zoraida`)) FIRST_NAMES.add(w);
+
+for (const w of set(`abello abril acevedo aguirre albarracin alarcon almanza alonso alvarado amador andrade angulo aponte aragon arboleda arcila
+arenas arevalo arismendi arrieta arteaga ayala baena ballesteros baquero barbosa barragan barreto barrios bautista becerra bedoya bejarano
+bello benavides bermeo bonilla borja botero bueno bustamante caballero cabezas cadena calle camargo campos canas cantor caro carmona carranza
+carrillo casas castaneda castellanos castilla cepeda cerquera chavez cordoba corredor cortes cubillos cuesta davila diez
+dominguez echeverry enriquez espitia esquivel fandino farfan fernandez ferreira figueroa fuentes gallardo galindo gamboa gamez garces
+gaona gil godoy gordillo grajales guarin guerra guerrero gutierrez guzman heredia herrera higuera hincapie holguin huertas ibanez jaimes jaramillo
+ lasso lemos leal leguizamon lizarazo lopera lozada lugo macias manjarres mantilla marmolejo mateus matiz mesa millan
+miranda molina monsalve montano montenegro montero monroy moncada mosquera munera murcia nieto noguera novoa obando olarte oliveros orjuela
+ospina osorio otero paez palacio palomino paredes pardo parada pastrana penagos penaloza pereira pimiento pinilla pinto polanco polo porras
+portilla puentes puerta quintero quinonez quiroz ramirez rangel restrepo reyes rico robayo robles rocha rodas roldan rosero rozo salamanca
+salgado samper sanabria santamaria santana santacruz segura serrano solarte sotelo suaza tapias tirado tobar toledo torres trujillo
+umana urbano urrea valbuena valdes valdez varela vela velandia vera vesga villalba villamil villarreal villota yanez zabala zamora`)) SURNAMES.add(w);
+
+// Cargos y palabras que van junto a un nombre en MAYÚSCULAS sin ser parte de él (firmas, encabezados de formularios).
+export const ROLE_WORDS = set(`magistrado magistrada conjuez conjueza ponente presidente presidenta vicepresidente secretario secretaria gerente
+contratista contratante supervisor supervisora interventor cedente cesionario demandante demandado demandada accionante accionado accionada
+apoderado apoderada representante oficial mayor juez jueza fiscal procurador procuradora profesional universitario especializado asesor asesora
+coordinador coordinadora director directora jefe arrendador arrendatario vendedor comprador testigo firma firmado elaboro reviso aprobo proyecto
+nombre nombres apellidos contribuyente afiliado cotizante beneficiario titular poderdante otorgante aceptante deudor codeudor`);
