@@ -18,6 +18,10 @@ export function useAnonymizer({ save, notify }) {
 
   const analysis = useMemo(() => (doc ? analyze(doc.paragraphs, entities, excluded) : null), [doc, entities, excluded]);
   const suggestions = useMemo(() => (doc ? findSuggestions(doc.paragraphs, entities, analysis) : []), [doc, entities, analysis]);
+  // Posibles nombres propios con señal débil (al inicio de frase, o una sola vez): se proponen, no se activan solos.
+  const nameSuggestions = useMemo(() => entities
+    .filter((e) => e.weak && !e.enabled)
+    .map((e) => ({ id: e.id, value: e.value, label: e.label, count: analysis ? analysis.counts[e.id] || 0 : 0 })), [entities, analysis]);
   const hits = useMemo(() => (doc ? findHits(doc.paragraphs, query) : EMPTY_HITS), [doc, query]);
   const currentHit = hits.list.length ? hits.list[hitIndex % hits.list.length] : null;
 
@@ -114,6 +118,10 @@ export function useAnonymizer({ save, notify }) {
     closePopover: () => dispatch({ type: 'close-popover' })
   }), []);
 
+  const dismissName = useCallback((id) => {
+    dispatch({ type: 'replace-entities', entities: entities.map((e) => (e.id === id ? { ...e, weak: false } : e)) });
+  }, [entities]);
+
   const renameEntity = useCallback((id, raw) => {
     const result = renameLabel(entities, id, raw);
     if (result.error) { notify(result.error, true); return; }
@@ -143,7 +151,7 @@ export function useAnonymizer({ save, notify }) {
 
   return {
     state, loaded: state.loaded, name: state.name, isSample: state.isSample, view: state.view,
-    warnings: doc ? doc.warnings : null, rows, categories, entities, suggestions, hits, currentHit, hitIndex,
+    warnings: doc ? doc.warnings : null, rows, categories, entities, suggestions, nameSuggestions, dismissName, hits, currentHit, hitIndex,
     query, replacements, dictionary, canUndo: state.past.length > 0, canRedo: state.future.length > 0,
     openCategories: state.openCategories, popover: state.popover, entityIndex,
     paragraphCount: doc ? doc.paragraphs.filter((p) => p.text.trim()).length : 0,

@@ -20,7 +20,7 @@ describe('App', () => {
     expect(document.body.textContent).toContain('[PERSONA_1]');
 
     const q = screen.getByPlaceholderText('Un nombre, empresa o número');
-    await user.type(q, 'Plaza Marina');
+    await user.type(q, 'artesanías');
     await user.click(await screen.findByRole('button', { name: /^Anonimizar (esta|las \d+)/ }));
     await waitFor(() => expect(document.body.textContent).toMatch(/\[DATO_1\]/));
 

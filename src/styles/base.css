@@ -10,6 +10,7 @@ h1, h2, h3, p { margin: 0; }
 .t-PERSONA { --h: 255; } .t-EMPRESA { --h: 305; } .t-CEDULA { --h: 50; } .t-NIT { --h: 70; }
 .t-CORREO { --h: 205; } .t-TELEFONO { --h: 180; } .t-DIRECCION { --h: 355; } .t-CUENTA { --h: 150; }
 .t-RADICADO { --h: 95; } .t-PLACA { --h: 25; } .t-FECHA { --h: 235; } .t-MONTO { --h: 130; } .t-OTRO { --h: 285; }
+.t-NOMBRE { --h: 330; } .t-LUGAR { --h: 165; }
 .tinted { background: oklch(var(--tag-l) var(--tag-c) var(--h)); color: oklch(var(--tagfg-l) var(--tagfg-c) var(--h)); }
 
 .btn { font-weight: 500; font-size: 13.5px; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; justify-content: center; white-space: nowrap; }

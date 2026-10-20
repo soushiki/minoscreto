@@ -128,7 +128,8 @@ export function findOcrVariants(texts, entities, { maxPerEntity = 8 } = {}) {
   for (const win of windows.values()) {
     const current = owner.get(win.key);
     for (const t of byLength.get(win.k)) {
-      if (current && (current === t.e || current.type !== t.e.type)) continue;
+      // Un «nombre propio» mal escrito por el OCR puede ser una persona o empresa ya detectada («Dlana Marcela Torres Gómez»).
+      if (current && (current === t.e || (current.type !== t.e.type && current.type !== 'NOMBRE'))) continue;
       let total = 0;
       let exact = 0;
       let ok = true;

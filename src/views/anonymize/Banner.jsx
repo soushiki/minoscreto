@@ -8,7 +8,7 @@ export default function Banner({ vm }) {
     <div className="banner">
       {vm.isSample && (
         <div className="note info">
-          <p><strong>Contrato de ejemplo con datos inventados.</strong> Haz clic en cualquier palabra del lado izquierdo para anonimizarla (prueba con «Plaza Marina»), o abre tu propio Word.</p>
+          <p><strong>Contrato de ejemplo con datos inventados.</strong> Haz clic en cualquier palabra del lado izquierdo para anonimizarla (prueba con «artesanías»), o abre tu propio Word.</p>
           <FileButton accept={DOCX} onFile={vm.loadFile} className="btn primary">Abrir mi Word</FileButton>
         </div>
       )}

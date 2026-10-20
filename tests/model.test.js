@@ -117,7 +117,7 @@ describe('operaciones de entidades (inmutables)', () => {
   it('agrega valores manuales, une variantes y valida etiquetas', async () => {
     const doc = await openDocx(await buildDocx(SAMPLE_PARAGRAPHS));
     const base = buildEntities(doc.paragraphs);
-    const withManual = addValue(base, { text: 'Plaza Marina', type: 'OTRO' });
+    const withManual = addValue(base, { text: 'artesanías', type: 'OTRO' });
     expect(base.length + 1).toBe(withManual.length);
     expect(withManual.at(-1)).toMatchObject({ label: 'DATO_1', manual: true, enabled: true });
     const host = base.find((e) => e.type === 'EMPRESA');

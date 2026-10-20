@@ -1,6 +1,7 @@
 import { TYPE_BY_ID } from './types.js';
 import { detect, COMPANY_SUFFIX_AT_END } from './detect.js';
 import { normKey } from './text.js';
+import { buildNameContext, withoutCue } from './properNouns.js';
 
 let sequence = 0;
 const newId = () => `e${++sequence}`;
@@ -29,16 +30,62 @@ export function createEntity(entities, type, value, manual = false) {
   };
 }
 
-export function buildEntities(paragraphs) {
+const keyWords = (key) => ` ${key} `;
+
+/**
+ * Un «nombre propio» que ya es otra entidad (su valor o variante) o parte de un nombre de persona o empresa
+ * no se duplica. Las partes sueltas de un nombre («Mendoza», «Carlos») se dejan a las sugerencias de fugas:
+ * unirlas solas podría mezclar a dos personas con el mismo nombre.
+ */
+function dropNamesCoveredByOthers(list) {
+  const others = list.filter((e) => e.type !== 'NOMBRE' && e.type !== 'LUGAR');
+  return list.filter((e) => {
+    if (e.type !== 'NOMBRE') return true;
+    const key = normKey(e.value);
+    return !others.some((o) => [o.value, ...o.aliases].some((v) => normKey(v) === key)
+      || ((o.type === 'PERSONA' || o.type === 'EMPRESA') && keyWords(normKey(o.value)).includes(keyWords(key))));
+  });
+}
+
+/** «Proyecto Altamira» y «Altamira» son el mismo nombre: una sola etiqueta, con la otra forma como variante. */
+function mergeCueVariants(list, byKey) {
+  const dropped = new Set();
+  for (const e of list) {
+    if (e.type !== 'NOMBRE' || dropped.has(e)) continue;
+    const short = withoutCue(e.value);
+    if (!short) continue;
+    const other = byKey.get(normKey(short));
+    if (other && other !== e && other.type === 'NOMBRE') {
+      e.aliases.push(other.value, ...other.aliases);
+      e.enabled = e.enabled || other.enabled;
+      if (!other.weak) delete e.weak;
+      dropped.add(other);
+    } else if (!other) {
+      e.aliases.push(short);
+    }
+    byKey.set(normKey(short), e);
+  }
+  return list.filter((e) => !dropped.has(e));
+}
+
+export function buildEntities(paragraphs, { names = true } = {}) {
   const byKey = new Map();
   const list = [];
+  const context = names ? buildNameContext(paragraphs.map((p) => p.text)) : null;
   for (const p of paragraphs) {
     if (!p.text.trim()) continue;
-    for (const d of detect(p.text)) {
+    for (const d of detect(p.text, context)) {
       const value = p.text.slice(d.start, d.end).trim();
       const key = normKey(value);
-      if (!key || byKey.has(key)) continue;
+      if (!key) continue;
+      const existing = byKey.get(key);
+      if (existing) {
+        // Un nombre visto primero con señal débil se confirma si luego aparece con señal fuerte.
+        if (existing.weak && !d.weak) { delete existing.weak; existing.enabled = TYPE_BY_ID[existing.type].on; }
+        continue;
+      }
       const entity = createEntity(list, d.type, value);
+      if (d.weak) { entity.weak = true; entity.enabled = false; }
       byKey.set(key, entity);
       list.push(entity);
     }
@@ -46,7 +93,7 @@ export function buildEntities(paragraphs) {
   for (const e of list) {
     if (e.type !== 'EMPRESA' || !COMPANY_SUFFIX_AT_END.test(e.value)) continue;
     const short = e.value.replace(COMPANY_SUFFIX_AT_END, '').trim();
-    if (short.length >= 6 && !byKey.has(normKey(short))) {
+    if (short.length >= 6 && (!byKey.has(normKey(short)) || byKey.get(normKey(short)).type === 'NOMBRE')) {
       e.aliases.push(short);
       byKey.set(normKey(short), e);
     }
@@ -59,7 +106,8 @@ export function buildEntities(paragraphs) {
     const host = people.find((o) => o !== e && !merged.has(o) && normKey(o.value).split(' ').length >= 2 && normKey(o.value).split(' ').includes(tokens[0]));
     if (host) { host.aliases.push(e.value); merged.add(e); }
   }
-  return list.filter((e) => !merged.has(e));
+  const rest = dropNamesCoveredByOthers(list.filter((e) => !merged.has(e)));
+  return mergeCueVariants(rest, byKey);
 }
 
 export const toNeedles = (entities) =>
