@@ -133,9 +133,11 @@ export function buildEntities(paragraphs, { names = true } = {}) {
       if (existing) {
         // Un nombre visto primero con señal débil se confirma si luego aparece con señal fuerte.
         if (existing.weak && !d.weak) { delete existing.weak; existing.enabled = TYPE_BY_ID[existing.type].on; }
+        if ((d.score || 0) > (existing.score || 0)) existing.score = d.score;
         continue;
       }
       const entity = createEntity(list, d.type, value);
+      if (d.score !== undefined) entity.score = d.score;
       if (d.weak) { entity.weak = true; entity.enabled = false; }
       byKey.set(key, entity);
       list.push(entity);
