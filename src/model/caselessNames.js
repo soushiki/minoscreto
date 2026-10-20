@@ -114,7 +114,9 @@ export function detectUpperNames(text, isFree) {
     const before = UPPER_CUE_BEFORE.test(text.slice(Math.max(0, start - 60), start));
     const after = UPPER_CUE_AFTER.test(text.slice(end, end + 40));
     const knownKept = kept.filter((w) => isNameWord(w.f));
-    const firstName = kept.slice(0, 2).some((w) => FIRST_NAMES.has(w.f));
+    // Un solo nombre conocido basta en un tramo de 3 a 5 palabras si está al principio: «HORTENSIA ÁVILA CÁRDENAS», o apellidos
+    // primero como en formularios y planillas, «GALEANO PERDOMO EUDORO».
+    const firstName = kept.slice(0, 2).some((w) => isNameWord(w.f));
     // Con solo una pista, ninguna palabra puede tener terminación de sustantivo común («IMPLEMENTACIÓN», «JURÍDICA»).
     const plain = kept.every((w) => isNameWord(w.f) || !COMMON_ENDING.test(w.f));
     const ok = knownKept.length >= 2 || (plain && (before || after || (firstName && kept.length >= 3 && kept.length <= 5)));
