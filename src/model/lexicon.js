@@ -105,3 +105,21 @@ contratista contratante supervisor supervisora interventor cedente cesionario de
 apoderado apoderada representante oficial mayor juez jueza fiscal procurador procuradora profesional universitario especializado asesor asesora
 coordinador coordinadora director directora jefe arrendador arrendatario vendedor comprador testigo firma firmado elaboro reviso aprobo proyecto
 nombre nombres apellidos contribuyente afiliado cotizante beneficiario titular poderdante otorgante aceptante deudor codeudor`);
+
+// Más comienzos de instituciones, normas, cargos y publicaciones («Sistema General de…», «Pacto Internacional…»,
+// «Administradora de Fondos…», «Partido Verde»): un nombre propio que empieza así no es un dato de alguien.
+for (const w of set(`sistema sistemas pacto convencion convenciones declaracion carta academia facultad facultades escuela observatorio
+ ministros procuradores administradora administradoras caja
+regimen titulo capitulo libro seccion subseccion subdireccion subdirecciones funcion funciones gaceta reglamento partido movimiento concejo
+plenaria plenarias honorables real editorial revista libreria edicion informe constancia intervencion presupuesto tesoro puntos liga
+secretarias comisiones agentes acto diarios diario altas alta maximo derecho derechos 
+ representantes`)) INSTITUTION_WORDS.add(w);
+
+// Vocabulario de formularios y documentos que va con mayúscula («Valor», «Tipo Persona», «Total Afiliados», «Prórroga»):
+// palabras comunes, no nombres.
+for (const w of set(`valor valores tipo total totales forma aporte aportes numero nombre nombres apellidos periodo registro certificado
+certificacion resumen rubro prorroga terminacion inicio respuesta gestion manual modelo formato prestacion persona ingreso entidades procesos
+obligaciones solucion mecanismos riesgos reunion cotizacion afiliado afiliados saldo porcentaje ejecutado aplica exonerado codigo version
+financiero financiera concepto tema consideracion novedades identificacion haga clic definir equipo gestor taller actividad actividades
+anexo observaciones descripcion fecha fechas cargo area dependencia firma razon social conciliar cargar marcar desmarcar imprimir extracto
+jan feb mar apr may jun jul aug sep oct nov dec ene abr ago dic`)) COMMON_CAPS.add(w);
