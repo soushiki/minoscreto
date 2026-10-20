@@ -128,3 +128,35 @@ describe('contrato de ejemplo', () => {
     expect(analysis.replacements).toBeGreaterThan(0);
   });
 });
+
+describe('nombres propios: menos falsas alarmas en documentos legales y formularios', () => {
+  const flagged = (texts) => buildEntities(texts.map((text) => ({ text }))).filter((e) => e.type === 'NOMBRE').map((e) => e.value);
+
+  it('no marca instituciones, normas ni publicaciones', () => {
+    expect(flagged([
+      'El Sistema General de Seguridad Social Integral cubre a los afiliados del Sistema General de Pensiones.',
+      'Según el Pacto Internacional de Derechos Civiles y la Convención Americana sobre Derechos Humanos, y el Partido Verde.',
+      'La Administradora de Fondos de Pensiones respondió, y la Facultad de Derecho intervino.'
+    ])).toEqual([]);
+  });
+
+  it('no marca palabras comunes con mayúscula ni rótulos de formularios', () => {
+    expect(flagged([
+      'Intervención de la Corporación. La Corporación decidió sobre las Garantías y las Garantías adicionales.',
+      'Tipo Persona: Natural. Total Afiliados: 1. Valor Cotización: 300. Prórroga: No Aplica.',
+      'Haga clic aquí. Haga clic para escribir.'
+    ])).toEqual([]);
+  });
+
+  it('sigue marcando nombres propios de verdad', () => {
+    expect(names(entitiesOf(['El proyecto Altamira avanza.', 'Se pagó por Davivienda y luego por Davivienda otra vez.']))).toEqual(['Altamira', 'Davivienda']);
+  });
+
+  it('un cargo antes del nombre no impide ocultar a la persona', () => {
+    const texts = ['hace uso de la palabra la Senadora Ximena Rocío Albornoz Pardo: gracias.'];
+    const ents = buildEntities(texts.map((text) => ({ text })));
+    const needles = toNeedles(ents.filter((e) => e.enabled));
+    const covered = findOccurrences(texts[0], needles).map((o) => texts[0].slice(o.start, o.end)).join(' ');
+    expect(covered).toContain('Ximena Rocío Albornoz Pardo');
+  });
+});

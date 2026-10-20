@@ -19,6 +19,20 @@ export const normKey = (value) => fold(value).replace(/\s+/g, ' ').trim();
 const WORD_CHAR = /[\p{L}\p{N}_]/u;
 export const isWordChar = (ch) => ch !== undefined && ch !== '' && WORD_CHAR.test(ch);
 
+const LETTER = /\p{L}/u;
+const DIGIT = /\p{N}/u;
+/**
+ * ¿El borde de un dato sigue dentro de una palabra más larga? Una letra pegada a otra letra («Ana» en «Anabel») o una
+ * cifra pegada a otra cifra («123» en «1234») sí; una cifra pegada a letras o guiones bajos no: «CC71234567»,
+ * «43.210.987de», «___43.210.987», o la llamada de nota en «Almeida3».
+ */
+function glued(edge, neighbor) {
+  if (neighbor === undefined || neighbor === '') return false;
+  if (LETTER.test(edge)) return LETTER.test(neighbor);
+  if (DIGIT.test(edge)) return DIGIT.test(neighbor);
+  return false;
+}
+
 export function findOccurrences(text, needles) {
   if (!text) return [];
   const folded = fold(text);
@@ -26,13 +40,11 @@ export function findOccurrences(text, needles) {
   for (const needle of needles) {
     const target = fold(needle.value);
     if (!target) continue;
-    const startsWord = isWordChar(target[0]);
-    const endsWord = isWordChar(target[target.length - 1]);
     let from = 0;
     let idx;
     while ((idx = folded.indexOf(target, from)) !== -1) {
       const end = idx + target.length;
-      if ((!startsWord || !isWordChar(folded[idx - 1])) && (!endsWord || !isWordChar(folded[end]))) {
+      if (!glued(target[0], folded[idx - 1]) && !glued(target[target.length - 1], folded[end])) {
         candidates.push({ start: idx, end, id: needle.id, enabled: needle.enabled !== false, len: target.length });
       }
       from = idx + 1;
