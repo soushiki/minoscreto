@@ -10,7 +10,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "eval": "node scripts/eval.mjs"
   },
   "dependencies": {
     "jszip": "^3.10.2",
