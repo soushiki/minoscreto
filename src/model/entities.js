@@ -68,6 +68,57 @@ function mergeCueVariants(list, byKey) {
   return list.filter((e) => !dropped.has(e));
 }
 
+// Un párrafo que no cierra con puntuación y otro que sigue con mayúscula o número pueden ser una sola línea partida
+// (OCR, tablas, Word convertido de PDF): «RUBIELA ESPERANZA CORTÉS ¶ MALAGÓN», «cédula de ciudadanía No. ¶ 52.318.904».
+// Abierto: sin puntuación de cierre, o con una abreviatura corta al final («No.», «Nro.», «C.C.», «Sr.»).
+const OPEN_END = /(?:[^.;:!?»”")\]]|(?:^|[\s(])(?:\p{L}{1,3}\.){1,2}|N[°º]\.?)\s*$/u;
+const CONTINUES = /^\s*[\p{Lu}\d]/u;
+const ACROSS_TYPES = new Set(['PERSONA', 'CEDULA', 'NIT', 'CUENTA', 'TELEFONO', 'CORREO', 'DIRECCION']);
+const MAX_CHAIN = 6;
+const MAX_PIECE_LINE = 120;
+
+/**
+ * Detecta en cadenas de párrafos que siguen uno al otro y devuelve lo que la detección por párrafo no puede ver:
+ * datos partidos entre párrafos (con sus pedazos, uno por párrafo, para reemplazarlos donde están) y números cuya pista
+ * quedó en el párrafo anterior. Solo mira párrafos cortos, como las líneas sueltas de un OCR.
+ */
+function detectAcrossBreaks(paragraphs, context) {
+  const out = [];
+  const texts = paragraphs.map((p) => p.text.trim());
+  let i = 0;
+  while (i < texts.length) {
+    let j = i;
+    while (j + 1 < texts.length && j - i + 1 < MAX_CHAIN && texts[j] && texts[j + 1]
+      && (texts[j].length <= MAX_PIECE_LINE || texts[j + 1].length <= MAX_PIECE_LINE)
+      && OPEN_END.test(texts[j]) && CONTINUES.test(texts[j + 1])) j++;
+    if (j > i) {
+      let joined = '';
+      const spans = [];
+      for (let k = i; k <= j; k++) {
+        if (joined) joined += ' ';
+        spans.push({ s: joined.length, e: joined.length + texts[k].length });
+        joined += texts[k];
+      }
+      for (const d of detect(joined, context)) {
+        if (!ACROSS_TYPES.has(d.type) || d.weak) continue;
+        const touched = spans.filter((sp) => sp.s < d.end && d.start < sp.e);
+        const crosses = touched.length > 1;
+        // Un número entero dentro de un párrafo ya lo vio la detección por párrafo, salvo que su pista esté en el anterior.
+        if (!crosses && d.type === 'PERSONA') continue;
+        const value = joined.slice(d.start, d.end).trim();
+        const pieces = crosses
+          ? touched.map((sp) => joined.slice(Math.max(sp.s, d.start), Math.min(sp.e, d.end)).replace(/^[\s,;:]+|[\s,;:]+$/g, ''))
+          : [];
+        // Cada pedazo debe ser algo (3 letras o cifras): «Jiménez ¶ C.C.» no es un nombre partido.
+        if (pieces.some((piece) => (piece.match(/[\p{L}\p{N}]/gu) || []).length < 3)) continue;
+        out.push({ type: d.type, value, pieces });
+      }
+    }
+    i = j + 1;
+  }
+  return out;
+}
+
 export function buildEntities(paragraphs, { names = true } = {}) {
   const byKey = new Map();
   const list = [];
@@ -88,6 +139,37 @@ export function buildEntities(paragraphs, { names = true } = {}) {
       if (d.weak) { entity.weak = true; entity.enabled = false; }
       byKey.set(key, entity);
       list.push(entity);
+    }
+  }
+  for (const d of detectAcrossBreaks(paragraphs, context)) {
+    const key = normKey(d.value);
+    let entity = byKey.get(key);
+    // Si un pedazo ya era un dato del mismo tipo, ese dato pasa a tener el valor completo y conserva su etiqueta.
+    const host = !entity && d.pieces.map((piece) => byKey.get(normKey(piece))).find((o) => o && o.type === d.type && list.includes(o));
+    if (host) {
+      host.aliases.push(host.value);
+      host.value = d.value;
+      entity = host;
+      byKey.set(key, entity);
+    } else if (!entity) {
+      entity = createEntity(list, d.type, d.value);
+      byKey.set(key, entity);
+      list.push(entity);
+    }
+    for (const piece of d.pieces) {
+      const pieceKey = normKey(piece);
+      if (pieceKey === normKey(entity.value) || entity.aliases.some((a) => normKey(a) === pieceKey)) continue;
+      const other = byKey.get(pieceKey);
+      if (other && other !== entity) {
+        // El pedazo ya era un dato propio («RUBIELA ESPERANZA CORTÉS» en su párrafo): pasa a ser una variante del completo.
+        if (other.type !== entity.type || !list.includes(other)) continue;
+        entity.aliases.push(other.value, ...other.aliases.filter((a) => normKey(a) !== normKey(entity.value)));
+        for (const v of [other.value, ...other.aliases]) byKey.set(normKey(v), entity);
+        list.splice(list.indexOf(other), 1);
+        continue;
+      }
+      entity.aliases.push(piece);
+      byKey.set(pieceKey, entity);
     }
   }
   for (const e of list) {
