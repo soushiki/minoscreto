@@ -12,6 +12,22 @@ const percentile = (values, p) => {
   return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
 };
 
+/** Celdas de una línea: fragmentos separados por un hueco ancho (más de dos caracteres), como las columnas de una tabla. */
+function lineCells(parts, h) {
+  const cells = [];
+  for (const p of parts) {
+    if (!p.str.trim()) continue;
+    const last = cells[cells.length - 1];
+    if (last && p.x - last.right <= h * 2) {
+      last.text = `${last.text} ${p.str}`.replace(/\s+/g, ' ').trim();
+      last.right = Math.max(last.right, p.x + p.w);
+    } else {
+      cells.push({ text: p.str.trim(), x: p.x, right: p.x + p.w });
+    }
+  }
+  return cells;
+}
+
 /** Agrupa los fragmentos de texto de pdf.js (getTextContent().items) en líneas con su posición. */
 export function itemsToLines(items) {
   const lines = [];
@@ -35,7 +51,7 @@ export function itemsToLines(items) {
     if (text) {
       const first = current.parts[0];
       const last = current.parts[current.parts.length - 1];
-      lines.push({ text, x: first.x, y: current.y, h: current.h, right: last.x + last.w });
+      lines.push({ text, x: first.x, y: current.y, h: current.h, right: last.x + last.w, cells: lineCells(current.parts, current.h) });
     }
     current = null;
   };

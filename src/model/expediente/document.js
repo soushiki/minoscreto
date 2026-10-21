@@ -1,6 +1,7 @@
 import { linesToParagraphs, isHeading, joinText, continuesOnNextPage } from './layout.js';
 import { reducePages } from './reduce.js';
 import { fixDigitConfusions } from './ocr.js';
+import { findTableHints } from './tables.js';
 
 const MIN_TEXT = 20;
 
@@ -59,7 +60,8 @@ export function buildDocument(pages, { reduce = false, fixOcr = true } = {}) {
 
   const chars = paragraphs.reduce((n, p) => n + p.text.length + 2, 0);
   return {
-    paragraphs, emptyPages: [...empty], removed: reduce ? source.removed : null, ocrFixes, pageJoins, chars, tokens: estimateTokens(chars),
+    paragraphs, hints: findTableHints(pages), emptyPages: [...empty], removed: reduce ? source.removed : null, ocrFixes, pageJoins, chars,
+    tokens: estimateTokens(chars),
     unit: 'folio', pageCount: pages.length
   };
 }
