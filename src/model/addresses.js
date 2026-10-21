@@ -1,5 +1,6 @@
 // Direcciones colombianas: «Calle 45 # 12-30», «Cra. 7 No. 71-21 Apto 502», «Av. Carrera 68 N° 24 - 10 Sur»,
 // «Dg 15 Bis A #45-20, Barrio La Floresta», «Mz 4 Casa 12», «Km 5 vía La Calera». En mayúsculas, minúsculas o mezcla.
+import { SCORES } from './scores.js';
 import { fold } from './text.js';
 import { STOP_WORDS, SENTENCE_STARTERS, COMMON_CAPS } from './lexicon.js';
 
@@ -63,7 +64,7 @@ function extend(text, end) {
 
 /** Marca las direcciones del texto (antes que los demás tipos, para que sus números no se lean como otra cosa). */
 export function detectAddresses(text, claims) {
-  const take = (start, end) => { if (end > start && claims.isFree(start, end)) claims.claim(start, end, 'DIRECCION'); };
+  const take = (start, end) => { if (end > start && claims.isFree(start, end)) claims.claim(start, end, 'DIRECCION', SCORES.address); };
   for (const re of [URBAN, BLOCK]) {
     re.lastIndex = 0;
     let m;

@@ -1,4 +1,6 @@
 import { TYPE_BY_ID } from './types.js';
+import { SCORES } from './scores.js';
+import { signatureNames } from './signatures.js';
 import { detect, COMPANY_SUFFIX_AT_END } from './detect.js';
 import { normKey } from './text.js';
 import { buildNameContext, withoutCue } from './properNouns.js';
@@ -119,7 +121,7 @@ function detectAcrossBreaks(paragraphs, context) {
   return out;
 }
 
-export function buildEntities(paragraphs, { names = true } = {}) {
+export function buildEntities(paragraphs, { names = true, hints = [] } = {}) {
   const byKey = new Map();
   const list = [];
   const context = names ? buildNameContext(paragraphs.map((p) => p.text)) : null;
@@ -133,13 +135,35 @@ export function buildEntities(paragraphs, { names = true } = {}) {
       if (existing) {
         // Un nombre visto primero con señal débil se confirma si luego aparece con señal fuerte.
         if (existing.weak && !d.weak) { delete existing.weak; existing.enabled = TYPE_BY_ID[existing.type].on; }
+        if ((d.score || 0) > (existing.score || 0)) existing.score = d.score;
         continue;
       }
       const entity = createEntity(list, d.type, value);
+      if (d.score !== undefined) entity.score = d.score;
       if (d.weak) { entity.weak = true; entity.enabled = false; }
       byKey.set(key, entity);
       list.push(entity);
     }
+  }
+  // Pistas de la maquetación (columnas de tablas, bloques de firma): datos que el texto solo no delata.
+  for (const h of [...hints, ...signatureNames(paragraphs)]) {
+    const key = normKey(h.value);
+    if (!key) continue;
+    const existing = byKey.get(key);
+    if (existing) {
+      // Una sugerencia débil o un «nombre propio» pasa a ser el dato que dice la maquetación.
+      if ((existing.weak || existing.type === 'NOMBRE') && existing.type !== h.type) {
+        existing.label = nextLabel(list.filter((e) => e !== existing), h.type);
+        existing.type = h.type;
+      }
+      if (existing.weak) { delete existing.weak; existing.enabled = TYPE_BY_ID[existing.type].on; }
+      if (existing.type === h.type) existing.enabled = TYPE_BY_ID[h.type].on || existing.enabled;
+      continue;
+    }
+    const entity = createEntity(list, h.type, h.value);
+    entity.score = SCORES.layout;
+    byKey.set(key, entity);
+    list.push(entity);
   }
   for (const d of detectAcrossBreaks(paragraphs, context)) {
     const key = normKey(d.value);

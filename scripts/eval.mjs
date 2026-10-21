@@ -57,7 +57,8 @@ async function readDoc(id) {
     const empty = exp.findEmptyPages(pages);
     let source = pdf;
     if (empty.length && ocr) { pages = await pdfPages(join(corpus, 'docs', ocr)); source = ocr; }
-    return { source, paragraphs: exp.buildDocument(pages, { fixOcr: true }).paragraphs, emptyPages: exp.findEmptyPages(pages), pages: pages.length };
+    const built = exp.buildDocument(pages, { fixOcr: true });
+    return { source, paragraphs: built.paragraphs, hints: built.hints || [], emptyPages: exp.findEmptyPages(pages), pages: pages.length };
   }
   if (txt) {
     // Texto plano: «\f» separa folios, las líneas en blanco separan párrafos.
@@ -85,7 +86,7 @@ const significant = (text, s, e) => { const out = []; for (let k = s; k < e; k++
 const context = (text, s, e) => `…${text.slice(Math.max(0, s - 50), s)}⟦${text.slice(s, e)}⟧${text.slice(e, e + 50)}…`.replace(/\n/g, ' ¶ ').replace(/\s+/g, ' ');
 
 function evaluate(id, doc, gold) {
-  const entities = tidy(buildEntities(doc.paragraphs));
+  const entities = tidy(buildEntities(doc.paragraphs, { hints: doc.hints || [] }));
   const needles = toNeedles(entities);
   const byId = new Map(entities.map((e) => [e.id, e]));
   // Todo el documento en un texto (párrafos separados por «\n»): un dato etiquetado puede quedar partido
@@ -160,7 +161,7 @@ for (const id of ids) {
     const byPage = new Map();
     doc.paragraphs.forEach((p) => byPage.set(p.page, [...(byPage.get(p.page) || []), p.text]));
     writeFileSync(join(corpus, 'work', `${id}.txt`), [...byPage].map(([n, ps]) => `=== FOLIO ${n}\n${ps.join('\n')}`).join('\n\n'));
-    const ents = tidy(buildEntities(doc.paragraphs));
+    const ents = tidy(buildEntities(doc.paragraphs, { hints: doc.hints || [] }));
     writeFileSync(join(corpus, 'work', `${id}.detected.json`), JSON.stringify(ents.map(({ type, value, aliases, enabled, weak }) => ({ type, value, aliases, enabled, weak })), null, 1));
     console.log(`${id}: ${doc.source} · ${doc.pages} folios · ${doc.emptyPages.length} sin texto · ${ents.length} entidades`);
     continue;

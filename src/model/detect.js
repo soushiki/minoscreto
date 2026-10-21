@@ -1,4 +1,5 @@
 import { fold } from './text.js';
+import { SCORES, THRESHOLD, nitCheckDigitOk } from './scores.js';
 import { detectProperNouns } from './properNouns.js';
 import { detectAddresses } from './addresses.js';
 import { detectCaselessNames, detectUpperNames } from './caselessNames.js';
@@ -17,21 +18,21 @@ export const COMPANY_SUFFIX_AT_END = new RegExp('[\\s,]*' + SUFFIX + '\\s*$', 'u
 const PLATE_IGNORED = /^(NIT|ART|CRA|CLL|TEL|CEL|NUM|FOL|PAR|EST|SAS|CIA|COP|USD|IVA)\b/;
 
 const RULES = [
-  { type: 'CORREO', re: /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.[\p{L}]{2,}/gu },
-  { type: 'NIT', group: 1, re: new RegExp('\\bNIT\\.?' + NUMBER_LABEL + '(\\d{1,3}(?:\\.\\d{3}){1,2}(?:-\\d)?|\\d{8,10}(?:-\\d)?)', 'giu') },
-  { type: 'CEDULA', group: 1, re: new RegExp('(?:\\bC\\.?\\s?C\\.?|\\bC\\.?\\s?E\\.?|\\bT\\.?\\s?I\\.?|\\bc[ée]dula(?:\\s+de\\s+(?:ciudadan[ií]?a|extranjer[ií]a))?|\\bpasaporte|\\bidentificad[oa]\\s+con)' + NUMBER_LABEL + '(\\d{1,3}(?:\\.\\d{3}){1,3}(?!\\d)|\\d{1,3}(?:,\\d{3}){2,3}(?!\\d|,\\d)|\\d{6,10}(?!\\d))', 'giu') },
-  { type: 'CUENTA', group: 1, re: new RegExp('(?:\\b[Cc]uenta(?:\\s+(?:de\\s+ahorros|corriente|bancaria|de\\s+n[oó]mina))?|\\b[Cc]ta\\.?(?:\\s+(?:cte|ahorros))?)(?:\\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,2}' + NUMBER_LABEL + '(\\d[\\d-]{6,20}\\d)', 'giu') },
-  { type: 'TELEFONO', group: 1, re: new RegExp('(?:\\b[Tt]el(?:[ée]fono)?|\\b[Cc]el(?:ular)?|\\b[Mm][oó]vil|\\b[Ww]hats[Aa]pp)\\.?\\s*:?\\s*(\\+?[\\d\\s()-]{7,18}\\d)', 'gu') },
-  { type: 'RADICADO', re: /\b\d{23}\b/g },
-  { type: 'RADICADO', re: /\b(?:19|20)\d{2}-\d{3,6}(?:-\d{2})?\b/g },
-  { type: 'NIT', re: /\b\d{1,3}(?:\.\d{3}){2}-\d\b|\b\d{9,10}-\d\b/g },
+  { type: 'CORREO', score: SCORES.cue, re: /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.[\p{L}]{2,}/gu },
+  { type: 'NIT', score: SCORES.cue, group: 1, re: new RegExp('\\bNIT\\.?' + NUMBER_LABEL + '(\\d{1,3}(?:\\.\\d{3}){1,2}(?:-\\d)?|\\d{8,10}(?:-\\d)?)', 'giu') },
+  { type: 'CEDULA', score: SCORES.cue, group: 1, re: new RegExp('(?:\\bC\\.?\\s?C\\.?|\\bC\\.?\\s?E\\.?|\\bT\\.?\\s?I\\.?|\\bc[ée]dula(?:\\s+de\\s+(?:ciudadan[ií]?a|extranjer[ií]a))?|\\bpasaporte|\\bidentificad[oa]\\s+con)' + NUMBER_LABEL + '(\\d{1,3}(?:\\.\\d{3}){1,3}(?!\\d)|\\d{1,3}(?:,\\d{3}){2,3}(?!\\d|,\\d)|\\d{6,10}(?!\\d))', 'giu') },
+  { type: 'CUENTA', score: SCORES.cue, group: 1, re: new RegExp('(?:\\b[Cc]uenta(?:\\s+(?:de\\s+ahorros|corriente|bancaria|de\\s+n[oó]mina))?|\\b[Cc]ta\\.?(?:\\s+(?:cte|ahorros))?)(?:\\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,2}' + NUMBER_LABEL + '(\\d[\\d-]{6,20}\\d)', 'giu') },
+  { type: 'TELEFONO', score: SCORES.cue, group: 1, re: new RegExp('(?:\\b[Tt]el(?:[ée]fono)?|\\b[Cc]el(?:ular)?|\\b[Mm][oó]vil|\\b[Ww]hats[Aa]pp)\\.?\\s*:?\\s*(\\+?[\\d\\s()-]{7,18}\\d)', 'gu') },
+  { type: 'RADICADO', score: SCORES.bareNumber, re: /\b\d{23}\b/g },
+  { type: 'RADICADO', score: SCORES.bareNumber, re: /\b(?:19|20)\d{2}-\d{3,6}(?:-\d{2})?\b/g },
+  { type: 'NIT', score: (v) => (nitCheckDigitOk(v) === false ? SCORES.nitBadCheck : SCORES.nitChecked), re: /\b\d{1,3}(?:\.\d{3}){2}-\d\b|\b\d{9,10}-\d\b/g },
   // Las direcciones las marca detectAddresses (addresses.js), antes de estas reglas.
-  { type: 'TELEFONO', re: /(?:\+?57[\s-]?)?\b3\d{2}[\s.-]?\d{3}[\s.-]?\d{4}\b|\(?\b60[1-8]\)?[\s-]?\d{3}[\s-]?\d{4}\b/g },
-  { type: 'FECHA', re: new RegExp('\\b\\d{1,2}\\s+de\\s+(?:' + MONTHS + ')(?:\\s+(?:de|del)\\s+\\d{4})?', 'giu') },
-  { type: 'FECHA', re: /\b\d{1,2}[/.-]\d{1,2}[/.-](?:\d{4}|\d{2})\b/g },
-  { type: 'MONTO', re: /\$\s?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?(?:\s?(?:millones|mil)\b)?/gu },
-  { type: 'MONTO', re: /\b\d{1,3}(?:[.,]\d{3})+\s*(?:pesos|COP|USD|dólares)\b/giu },
-  { type: 'PLACA', re: /\b[A-Z]{3}[\s-]?\d{3}\b|\b[A-Z]{3}\d{2}[A-Z]\b/g, skip: (s) => PLATE_IGNORED.test(s) }
+  { type: 'TELEFONO', score: SCORES.bareNumber, re: /(?:\+?57[\s-]?)?\b3\d{2}[\s.-]?\d{3}[\s.-]?\d{4}\b|\(?\b60[1-8]\)?[\s-]?\d{3}[\s-]?\d{4}\b/g },
+  { type: 'FECHA', score: SCORES.cue, re: new RegExp('\\b\\d{1,2}\\s+de\\s+(?:' + MONTHS + ')(?:\\s+(?:de|del)\\s+\\d{4})?', 'giu') },
+  { type: 'FECHA', score: SCORES.cue, re: /\b\d{1,2}[/.-]\d{1,2}[/.-](?:\d{4}|\d{2})\b/g },
+  { type: 'MONTO', score: SCORES.cue, re: /\$\s?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?(?:\s?(?:millones|mil)\b)?/gu },
+  { type: 'MONTO', score: SCORES.cue, re: /\b\d{1,3}(?:[.,]\d{3})+\s*(?:pesos|COP|USD|dólares)\b/giu },
+  { type: 'PLACA', score: SCORES.plate, re: /\b[A-Z]{3}[\s-]?\d{3}\b|\b[A-Z]{3}\d{2}[A-Z]\b/g, skip: (s) => PLATE_IGNORED.test(s) }
 ];
 
 const isCapitalized = (w) => w[0] !== w[0].toLowerCase() && w[0] === w[0].toUpperCase();
@@ -43,7 +44,10 @@ function makeClaims(length) {
   return {
     found,
     isFree: (s, e) => { for (let k = s; k < e; k++) if (taken[k]) return false; return true; },
-    claim(s, e, type, extra) { taken.fill(1, s, e); found.push({ start: s, end: e, type, ...extra }); }
+    claim(s, e, type, score) {
+      taken.fill(1, s, e);
+      found.push({ start: s, end: e, type, score, ...(score < THRESHOLD ? { weak: true } : {}) });
+    }
   };
 }
 
@@ -60,7 +64,8 @@ function detectByPattern(text, claims) {
         start = end - m[rule.group].length;
       }
       if (rule.skip && rule.skip(m[0])) continue;
-      if (claims.isFree(start, end)) claims.claim(start, end, rule.type);
+      const score = typeof rule.score === 'function' ? rule.score(text.slice(start, end)) : rule.score;
+      if (claims.isFree(start, end)) claims.claim(start, end, rule.type, score);
     }
   }
 }
@@ -95,7 +100,7 @@ function detectCompanies(text, claims) {
     }
     if (first === k) continue;
     const start = tokens[first].s + (/^[("“]/.test(tokens[first].w) ? 1 : 0);
-    if (claims.isFree(start, suffixEnd)) claims.claim(start, suffixEnd, 'EMPRESA');
+    if (claims.isFree(start, suffixEnd)) claims.claim(start, suffixEnd, 'EMPRESA', SCORES.company);
   }
 }
 
@@ -151,7 +156,7 @@ function detectPeopleAndPrefixedOrgs(text, claims) {
       }
       while (last > a && CONNECTORS.has(fold(words[last].w))) last--;
       if (last > a && claims.isFree(words[a].s, words[last].e)) {
-        claims.claim(words[a].s, words[last].e, 'EMPRESA');
+        claims.claim(words[a].s, words[last].e, 'EMPRESA', SCORES.company);
         continue;
       }
     }
@@ -184,7 +189,7 @@ function detectPeopleAndPrefixedOrgs(text, claims) {
     const isName = (FIRST_NAMES.has(firstWord) && (count >= 2 || honorific || a - lead === 2)) || (honorific && !NOT_NAMES.has(firstWord));
     if (!isName) continue;
     if (lead < a && claims.isFree(words[lead].s, words[b].e)) a = lead;
-    if (claims.isFree(words[a].s, words[b].e)) claims.claim(words[a].s, words[b].e, 'PERSONA');
+    if (claims.isFree(words[a].s, words[b].e)) claims.claim(words[a].s, words[b].e, 'PERSONA', SCORES.person);
   }
 }
 
@@ -195,11 +200,11 @@ export function detect(text, context = null) {
   detectByPattern(text, claims);
   detectCompanies(text, claims);
   detectPeopleAndPrefixedOrgs(text, claims);
-  for (const d of detectUpperNames(text, claims.isFree)) claims.claim(d.start, d.end, 'PERSONA');
-  for (const d of detectCaselessNames(text, claims.isFree)) claims.claim(d.start, d.end, 'PERSONA', d.weak ? { weak: true } : undefined);
+  for (const d of detectUpperNames(text, claims.isFree)) claims.claim(d.start, d.end, 'PERSONA', SCORES.upperName);
+  for (const d of detectCaselessNames(text, claims.isFree)) claims.claim(d.start, d.end, 'PERSONA', d.weak ? SCORES.weak : SCORES.caselessName);
   if (context) {
     for (const d of detectProperNouns(text, claims.isFree, context)) {
-      if (claims.isFree(d.start, d.end)) claims.claim(d.start, d.end, d.type, d.weak ? { weak: true } : undefined);
+      if (claims.isFree(d.start, d.end)) claims.claim(d.start, d.end, d.type, d.weak ? SCORES.weak : SCORES.properNoun);
     }
   }
   return claims.found.sort((p, q) => p.start - q.start);
