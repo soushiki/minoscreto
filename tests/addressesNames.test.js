@@ -165,3 +165,23 @@ describe('otros formatos de cédula y cuenta', () => {
     expect(found('pagó $ 1,250,000 pesos según la Ley N 1150 de 2007', 'CEDULA')).toEqual([]);
   });
 });
+
+describe('nombres completos con una palabra en minúscula', () => {
+  it.each([
+    ['El señor Ernesto hernán Villabona Ruiz firmó el contrato.', 'Ernesto hernán Villabona Ruiz'],
+    ['Lo recibió Gloria Patricia ospina Vélez en la oficina.', 'Gloria Patricia ospina Vélez'],
+    ['Según Julio César Arango gómez, el pago se hizo.', 'Julio César Arango gómez'],
+    ['Comparece Rigoberto albán Restrepo, identificado con C.C. 71.234.567.', 'Rigoberto albán Restrepo'],
+    ['La demandante Yuliza marcela Paz Obregón presentó el escrito.', 'Yuliza marcela Paz Obregón'],
+    ['Luego Carlos andrés Mendoza ríos pagó la cuota.', 'Carlos andrés Mendoza ríos']
+  ])('«%s»', (text, name) => {
+    expect(people(text).map(([v]) => v)).toContain(name);
+  });
+
+  it('no suma verbos ni palabras comunes en minúscula', () => {
+    expect(people('El señor Carlos Pérez pagó la mora el lunes.').map(([v]) => v)).toEqual(['Carlos Pérez']);
+    expect(people('Juan Gómez vive en la calle 5 con María Ruiz.').map(([v]) => v)).toEqual(['Juan Gómez', 'María Ruiz']);
+    expect(people('Pedro Sánchez firmó y Luis Torres recibió.').map(([v]) => v)).toEqual(['Pedro Sánchez', 'Luis Torres']);
+    expect(people('Ana María compró paz y tranquilidad.').map(([v]) => v)).toEqual(['Ana María']);
+  });
+});

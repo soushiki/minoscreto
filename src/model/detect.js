@@ -5,7 +5,7 @@ import { detectAddresses } from './addresses.js';
 import { detectCaselessNames, detectUpperNames } from './caselessNames.js';
 import {
   FIRST_NAMES, HONORIFICS, STOP_WORDS, NOT_NAMES, CONNECTORS, ORG_CONNECTORS, ORG_PREFIXES, ROLE_WORDS, SURNAMES, COMMON_CAPS,
-  INSTITUTION_WORDS, PLACES, NAME_CUES, SENTENCE_STARTERS
+  INSTITUTION_WORDS, PLACES, NAME_CUES, SENTENCE_STARTERS, COMMON_LOWER_NAMES
 } from './lexicon.js';
 
 const MONTHS = 'enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre';
@@ -104,6 +104,39 @@ function detectCompanies(text, claims) {
   }
 }
 
+const isNameWord = (f) => FIRST_NAMES.has(f) || SURNAMES.has(f);
+const commonWord = (f) => STOP_WORDS.has(f) || COMMON_CAPS.has(f) || SENTENCE_STARTERS.has(f) || INSTITUTION_WORDS.has(f)
+  || HONORIFICS.has(f) || ROLE_WORDS.has(f) || CONNECTORS.has(f) || NAME_CUES.has(f) || PLACES.has(f);
+// Terminaciones de verbo o participio: «pagó», «firmando», «firmado», «recibió»… no son parte de un nombre.
+const VERB_LIKE = /(?:[oó]|i[oó]|aba|aron|ando|iendo|endo|ado|ada|ido|ida|ar|er|ir|mente)$/u;
+
+/**
+ * ¿La palabra en minúscula que sigue (words[j + 1]) es parte del nombre que va en words[i..j]? Un nombre escrito a la
+ * carrera deja palabras en minúscula: «Carlos andrés Mendoza Ríos», «Teodoro albán Rincón», «Mendoza ríos».
+ */
+function lowercaseNamePart(text, words, i, j) {
+  const next = words[j + 1];
+  if (!/^\p{Ll}/u.test(next.w)) return false;
+  const f = fold(next.w);
+  const all = words.slice(i, j + 1).map((w) => fold(w.w));
+  // El nombre empieza en su primera palabra de nombre conocida o en la palabra con mayúscula justo antes de un nombre
+  // de pila en minúscula («Yurani lorena …»); lo de antes («Luego», «Comparece») no cuenta.
+  const firstKnown = all.findIndex(isNameWord);
+  if (firstKnown < 0 && !(FIRST_NAMES.has(f) && all.length >= 1)) return false;
+  const run = firstKnown < 0 ? all.slice(-1) : all.slice(firstKnown);
+  if (run.filter((w) => !CONNECTORS.has(w)).length >= 5) return false;
+  if (commonWord(f)) return false;
+  // Nombre o apellido conocido que no es palabra común: «andrés», «lorena», «quintero», «gómez».
+  if (isNameWord(f) && !COMMON_LOWER_NAMES.has(f)) return true;
+  const after = words[j + 2];
+  const spacedAfter = after && onlySpaces.test(text.slice(next.e, after.s));
+  // Palabra desconocida entre un nombre y un apellido conocido con mayúscula: «Teodoro albán Rincón».
+  if (!isNameWord(f) && spacedAfter && isCapitalized(after.w) && SURNAMES.has(fold(after.w)) && f.length >= 3 && !VERB_LIKE.test(f)) return true;
+  // Apellido que también es palabra común, al final: «Carlos Mendoza ríos» (nombre + apellido + apellido).
+  return COMMON_LOWER_NAMES.has(f) && SURNAMES.has(f) && SURNAMES.has(run[run.length - 1]) && run.some((w) => FIRST_NAMES.has(w))
+    && run.length <= 3 && !(spacedAfter && (isCapitalized(after.w) || isNameWord(fold(after.w))));
+}
+
 function capitalizedRuns(text, words) {
   const runs = [];
   let i = 0;
@@ -114,6 +147,7 @@ function capitalizedRuns(text, words) {
       if (j + 1 >= words.length) break;
       if (!onlySpaces.test(text.slice(words[j].e, words[j + 1].s))) break;
       if (isCapitalized(words[j + 1].w)) { j++; continue; }
+      if (lowercaseNamePart(text, words, i, j)) { j++; continue; }
       let k = j + 1;
       while (k < words.length && CONNECTORS.has(fold(words[k].w)) && onlySpaces.test(text.slice(words[k - 1].e, words[k].s))) k++;
       if (k > j + 1 && k < words.length && onlySpaces.test(text.slice(words[k - 1].e, words[k].s)) && isCapitalized(words[k].w)) { j = k; continue; }
@@ -132,6 +166,10 @@ const surnameLike = (f) => SURNAMES.has(f) || !(FIRST_NAMES.has(f) || STOP_WORDS
 function surnamesBefore(words, a, runStart, b) {
   const lead = Math.max(runStart, a - 2);
   if (lead >= a) return a;
+  // «Yurani lorena Paz Obando»: la palabra con mayúscula justo antes de un nombre de pila escrito en minúscula también
+  // es un nombre de pila, aunque no esté en la lista.
+  if (/^\p{Ll}/u.test(words[a].w) && isCapitalized(words[a - 1].w) && surnameLike(fold(words[a - 1].w))
+    && !SURNAMES.has(fold(words[a - 1].w))) return a - 1;
   const before = words.slice(lead, a).map((w) => fold(w.w));
   if (!before.every(surnameLike)) return a;
   const onlyFirstNames = words.slice(a, b + 1).every((w) => FIRST_NAMES.has(fold(w.w)) || CONNECTORS.has(fold(w.w)));
