@@ -123,3 +123,10 @@ obligaciones solucion mecanismos riesgos reunion cotizacion afiliado afiliados s
 financiero financiera concepto tema consideracion novedades identificacion haga clic definir equipo gestor taller actividad actividades
 anexo observaciones descripcion fecha fechas cargo area dependencia firma razon social conciliar cargar marcar desmarcar imprimir extracto
 jan feb mar apr may jun jul aug sep oct nov dec ene abr ago dic`)) COMMON_CAPS.add(w);
+
+// Nombres y apellidos que en minúscula suelen ser palabras comunes («la mora», «la calle», «los ríos», «paz»): dentro de
+// un nombre en minúscula solo cuentan para completar «nombre + apellido + apellido».
+export const COMMON_LOWER_NAMES = set(`mora calle casas salas torres flores campos montes mesa plata pena paz cruz luz rosa luna toro leon blanco
+franco bravo leal rico bueno santos reyes rey villa vega rios campo sierra cano vidal lara nieto palacio puentes vela vera pinto gil rubio
+angel amparo consuelo esperanza dolores mercedes pilar soledad victoria rocio azucena gloria clara blanca sol estrella aurora alegria cielo
+patria fe caridad milagros remedios socorro rosario piedad merced reina cristo jesus santa santo`);
