@@ -201,7 +201,7 @@ describe('nombre de pila en minúscula o apellido en minúscula', () => {
   });
 
   it('no marca frases comunes', () => {
-    for (const text of ['Hay ríos de dinero en el proceso.', 'Se firmó la paz del acuerdo.', 'Los ríos de dinero y la paz del acuerdo.']) {
+    for (const text of ['Hay ríos de dinero en el proceso.', 'Se firmó la paz del acuerdo.', 'Los ríos de dinero y la paz del acuerdo.', 'Él pagó en ríos de dinero.']) {
       expect(people(text)).toEqual([]);
     }
   });
