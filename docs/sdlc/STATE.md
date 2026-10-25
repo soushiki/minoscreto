@@ -5,7 +5,7 @@ goal: Detect person names in every casing permutation («Fidel castro», «fidel
 size: S
 exposed: yes    # yes → apply references/app-security.md (web, mobile, desktop, API)
 regulated: no   # yes → externally owned values rules (design + implement)
-next: 5-implement
+next: 7-release
 
 ## Stages
 - [x] 0-triage
@@ -13,8 +13,8 @@ next: 5-implement
 - [x] 2-requirements   (approved 2026-10-24)
 - [~] 3-design         (gate: user approval)
 - [x] 4-plan
-- [x] 5-implement      current task: FIX4 (FIX1–3 done)
-- [~] 6-test         (iteration 1 re-run: criteria pass; FIX4–5 filed)
+- [x] 5-implement      current task: — (FIX1–5 done)
+- [x] 6-test         (iteration 1 passes after FIX1–5; smoke pending user)
 - [ ] 7-release
 - [~] 8-maintain
 
@@ -36,3 +36,5 @@ next: 5-implement
 2026-10-24 | 5-implement | FIX2 done (Sonnet subagent): findOccurrences isExcluded option, excluded part never joins its neighbour; 152 tests green; expediente path has no exclusions, left as is → next FIX3
 2026-10-24 | 5-implement | FIX3 done (Sonnet subagent): readVariants uses Object.hasOwn; test fails pre-fix, 153 tests green; FIX1–3 complete → next 6-test (re-run iteration 1)
 2026-10-24 | 6-test | re-run: 153 green, R1–R3/S1 criteria pass, FIX1–3 verified; review found 2 name leaks («ana María Gómez», «Dra. lucía Paz») → FIX4–5 filed → next 5-implement
+2026-10-24 | 5-implement | FIX4 (detect.js cue-led lowercase first name joins capitalized run) + FIX5 (caselessNames ledSurname, places excluded after verify) done; 158 green
+2026-10-24 | 6-test | re-run 2: PASS, 158 green, all Musts pass; manual smoke pending user → next 7-release
