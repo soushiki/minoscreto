@@ -29,7 +29,7 @@ Probe of the widened honorific rule (`CUE_BEFORE` + `cue && lower → title`, `s
 ## Debt
 - No linter configured; FIX diff is +43/−15, no function grew past ~15 lines. No DEBT task.
 
-## Smoke (manual, ≈5 min — pending user)
+## Smoke (manual, ≈5 min — PASS on prod 2026-10-24, user)
 1. `npm run dev`, paste: «El señor fidel Castro firmó. Testigo: FIDEL castro. Pagó Fidel castro y luego castro se fue.»
 2. Each name is one [PERSONA_n]; if «Fidel castro» is split, click «castro» → add to the label → one tag.
 3. Exclude «Fidel» at one spot, then add «castro» → «castro» there is still replaced.
