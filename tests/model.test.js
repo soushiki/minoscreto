@@ -3,7 +3,7 @@ import JSZip from 'jszip';
 import {
   buildDocx, openDocx, buildEntities, exportAnonymized, restoreDocx, restoreText, buildDictionary,
   dictionaryToText, parseDictionary, analyze, findSuggestions, findHits, addValue, renameLabel,
-  setCategoryEnabled, retype, SAMPLE_PARAGRAPHS, findOccurrences, detect
+  setCategoryEnabled, retype, createEntity, addAlias, SAMPLE_PARAGRAPHS, findOccurrences, detect
 } from '../src/model/index.js';
 
 const textsOf = async (blob) => {
@@ -137,5 +137,19 @@ describe('operaciones de entidades (inmutables)', () => {
     const suggestions = findSuggestions(paragraphs, ents, analysis);
     expect(suggestions.map((s) => s.token).sort()).toEqual(['Carlos', 'Mendoza']);
     expect(findHits(paragraphs, 'mendoza').list).toHaveLength(2);
+  });
+});
+
+describe('tramos contiguos de una misma entidad', () => {
+  it('une «Fidel castro» (valor + variante) en una sola etiqueta, en cualquier orden', async () => {
+    const [base] = [createEntity([], 'PERSONA', 'Fidel', true)];
+    const ents = addAlias([base], base.id, 'castro');
+    const paragraphs = [{ text: 'Firmó Fidel castro y luego castro Fidel, no castro.' }];
+    const analysis = analyze(paragraphs, ents, new Set());
+    expect(analysis.occurrences[0].map((o) => paragraphs[0].text.slice(o.start, o.end)))
+      .toEqual(['Fidel castro', 'castro Fidel', 'castro']);
+    const buffer = await buildDocx(['Firmó Fidel castro hoy.']);
+    const { blob } = await exportAnonymized(buffer, ents, new Set());
+    expect(await textsOf(blob)).toContain('Firmó [PERSONA_1] hoy.');
   });
 });

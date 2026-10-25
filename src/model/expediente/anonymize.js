@@ -12,7 +12,7 @@ export function anonymizeTexts(texts, entities) {
   const out = texts.map((text) => {
     if (!text.trim()) return text;
     const ranges = [];
-    for (const o of findOccurrences(text, needles)) {
+    for (const o of findOccurrences(text, needles, { join: true })) {
       counts[o.id] = (counts[o.id] || 0) + 1;
       const entity = byId.get(o.id);
       if (!entity.enabled) continue;

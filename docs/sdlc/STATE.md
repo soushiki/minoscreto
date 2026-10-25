@@ -13,7 +13,7 @@ next: 5-implement
 - [x] 2-requirements   (approved 2026-10-24)
 - [~] 3-design         (gate: user approval)
 - [x] 4-plan
-- [ ] 5-implement      current task: T2
+- [ ] 5-implement      current task: T3
 - [ ] 6-test
 - [ ] 7-release
 - [~] 8-maintain
@@ -28,3 +28,4 @@ next: 5-implement
 2026-10-24 | 2-requirements | approved: R1 name in any casing (Must), R2 clicked word joins adjacent label, one tag, exact restore (Must), R3 undo + old dictionaries (Should); S1 local only; defaults for Q1–Q3 → next 4-plan
 2026-10-24 | 4-plan | 1 iteration, T1–T4 ≈5 h; decided __variants__ JSON key for per-occurrence restore (old dicts unchanged) → next 5-implement
 2026-10-24 | 5-implement | T1 done (Sonnet subagent): fidel Castro / FIDEL castro tagged whole, bare lowercase pair weak; 139 tests green; detection 23.9 vs 23.8 ms → next T2
+2026-10-24 | 5-implement | T2 done (Sonnet subagent): findOccurrences join merges same-entity hits split by spaces (text/docx/expediente); 141 tests green; user approved extra files → next T3

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import JSZip from 'jszip';
-import { buildEntities, buildDictionary } from '../src/model/index.js';
+import { buildEntities, buildDictionary, createEntity, addAlias } from '../src/model/index.js';
 import {
   itemsToLines, linesToParagraphs, isHeading, reducePages, isJunk, isPageNumber, buildDocument, formatPageRanges,
   splitParts, renderParts, renderWhole, renderBlocks, buildPartsZip, anonymizeTexts, buildSearchIndex, searchIndex,
@@ -294,5 +294,14 @@ describe('expediente desde Word', () => {
     const parts = renderParts({ blocks, parts: [{ from: 0, to: 1, overlapFrom: 0 }, { from: 1, to: 2, overlapFrom: 1 }], emptyPages: [], unit: 'parrafo' });
     expect(parts[1].text).toMatch(/^Parte 2 de 2 · párrafo 2\n/);
     expect(renderWhole({ name: 'x', blocks, emptyPages: [], unit: 'pagina' })).toContain('Expediente completo · páginas 1–2');
+  });
+});
+
+describe('tramos contiguos de una misma entidad', () => {
+  it('anonimiza «Fidel castro» como una sola etiqueta', () => {
+    const base = createEntity([], 'PERSONA', 'Fidel', true);
+    const ents = addAlias([base], base.id, 'castro');
+    const out = anonymizeTexts(['Fidel castro y castro Fidel; solo castro.'], ents);
+    expect(out.texts[0]).toBe('[PERSONA_1] y [PERSONA_1]; solo [PERSONA_1].');
   });
 });
