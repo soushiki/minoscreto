@@ -8,7 +8,7 @@ import {
 
 const WORD_RE = /[\p{L}][\p{L}'’]*/gu;
 const LINKS = new Set(['de', 'del', 'la', 'las', 'los']);
-const CUE_BEFORE = /(?:se[nñ]or(?:a|es|as)?|sr|sra|srta|dr|dra|doctora?|don|do[nñ]a|ciudadan[oa]|identificad[oa]\s+con|c\.?\s?c\.?|a\s+favor\s+de|demandante|demandad[oa]|apoderad[oa]|accionante|firma|firmado\s+por|nombre)\s*[:.,]?\s*$/iu;
+export const CUE_BEFORE = /(?:se[nñ]or(?:a|es|as)?|sr|sra|srta|dr|dra|doctora?|don|do[nñ]a|ciudadan[oa]|identificad[oa]\s+con|c\.?\s?c\.?|a\s+favor\s+de|demandante|demandad[oa]|apoderad[oa]|accionante|firma|firmado\s+por|nombre)\s*[:.,]?\s*$/iu;
 const CUE_AFTER = /^\s*,?\s*(?:identificad[oa]|c\.?\s?c\.?\s|con\s+c[eé]dula|mayor\s+de\s+edad|quien\s+se\s+identifica)/iu;
 const MAX_WORDS = 5;
 
