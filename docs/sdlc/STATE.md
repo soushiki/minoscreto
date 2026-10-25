@@ -43,3 +43,4 @@ next: 8-maintain   (no open items; monthly checklist due 2026-11)
 2026-10-24 | 7-release | prod smoke PASS 4/4 (user); release 0.3.0 closed → next 8-maintain (security headers gap)
 2026-10-24 | 8-maintain | security headers XS: static headers in netlify.toml + build-generated hashed CSP (dist/_headers); local smoke clean, 158 green; commit/deploy pending user
 2026-10-24 | 8-maintain | headers deployed (21a2e2d): live headers + CSP hash verified, prod PDF smoke OK; Netlify HUD script blocked by CSP (harmless)
+2026-10-24 | 8-maintain | checked: no open items; next monthly checklist 2026-11 (deps+audit, DORA, logs, prune docs/sdlc to archive/)
