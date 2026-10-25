@@ -2,6 +2,7 @@
 export default function DownloadReceipt({ receipt, onDictionaryAgain }) {
   if (!receipt) return null;
   const zip = receipt.kind === 'zip';
+  const tap = receipt.manual && !receipt.dictDone;
   const mark = (done) => <span className={`dl-mark${done ? ' ok' : ''}`} aria-hidden="true">{done ? '✓' : '…'}</span>;
   return (
     <div className="dl-receipt" role="status" aria-live="polite">
@@ -12,13 +13,15 @@ export default function DownloadReceipt({ receipt, onDictionaryAgain }) {
         </li>
         <li className={receipt.dictDone ? 'ok' : ''}>
           {mark(receipt.dictDone)}
-          <span><strong>2. Diccionario</strong><small>{zip ? 'Dentro del mismo archivo, en la carpeta NO-SUBIR' : receipt.dictName}</small></span>
+          <span><strong>2. Diccionario</strong><small>{zip ? 'Dentro del mismo archivo, en la carpeta NO-SUBIR' : tap ? `Toque «Descargar diccionario» para bajar ${receipt.dictName}` : receipt.dictName}</small></span>
         </li>
       </ol>
       <p className="dl-remind"><strong>Guarde el diccionario:</strong> lo necesitará para recuperar los nombres. No lo suba a la IA.</p>
       <div className="dl-again">
-        <button type="button" className="btn" onClick={onDictionaryAgain}>Descargar diccionario de nuevo</button>
-        {!zip && <span className="muted">Si el navegador preguntó si permite descargar varios archivos, elija «Permitir».</span>}
+        {tap
+          ? <button type="button" className="btn primary" onClick={onDictionaryAgain}>Descargar diccionario</button>
+          : <button type="button" className="btn" onClick={onDictionaryAgain}>Descargar diccionario de nuevo</button>}
+        {!zip && !receipt.manual && <span className="muted">Si el navegador preguntó si permite descargar varios archivos, elija «Permitir».</span>}
       </div>
     </div>
   );
