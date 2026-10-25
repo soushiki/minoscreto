@@ -53,10 +53,11 @@
   `__proto__`/`toString` keys yields `{}` with an ordinary prototype; test in `tests/model.test.js` — files:
   `src/model/dictionary.js` — model: Sonnet
   — hecho: `dict[k] !== undefined` replaced by `Object.hasOwn(dict, k)`; 1 test added
-- [ ] FIX4 (S) Lowercase first name before a capitalized full name: «Firma: ana María Gómez» → one strong PERSONA
+- [x] FIX4 (S) Lowercase first name before a capitalized full name: «Firma: ana María Gómez» → one strong PERSONA
   «ana María Gómez» (today «ana» leaks) — done when: case added to the `nombre de pila en minúscula…` block of
   `tests/addressesNames.test.js`, suite green — files: `src/model/caselessNames.js` and/or `src/model/detect.js`
   (merge a cue-led lowercase word into the adjacent capitalized span) — model: Sonnet
+  — hecho: `CUE_BEFORE` exported; detect.js folds a cue-led lowercase first name into the adjacent capitalized run; 2 tests added (1 case + 1 no-false-positive); suite 155 green
 - [ ] FIX5 (XS) Abbreviated honorific with dot: «Dra. lucía Paz llegó.», «El Dr. fidel Castro firmó.» → one strong
   PERSONA each — done when: cases in the same test block, suite green — files: `src/model/caselessNames.js`
   (`CUE_BEFORE` / where the preceding text is cut) — model: Sonnet

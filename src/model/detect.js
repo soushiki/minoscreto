@@ -2,7 +2,7 @@ import { fold } from './text.js';
 import { SCORES, THRESHOLD, nitCheckDigitOk } from './scores.js';
 import { detectProperNouns } from './properNouns.js';
 import { detectAddresses } from './addresses.js';
-import { detectCaselessNames, detectUpperNames } from './caselessNames.js';
+import { detectCaselessNames, detectUpperNames, CUE_BEFORE } from './caselessNames.js';
 import {
   FIRST_NAMES, HONORIFICS, STOP_WORDS, NOT_NAMES, CONNECTORS, ORG_CONNECTORS, ORG_PREFIXES, ROLE_WORDS, SURNAMES, COMMON_CAPS,
   INSTITUTION_WORDS, PLACES, NAME_CUES, SENTENCE_STARTERS, COMMON_LOWER_NAMES
@@ -229,6 +229,10 @@ function detectPeopleAndPrefixedOrgs(text, claims) {
     // «fidel castro» sin ninguna mayúscula: lo decide detectCaselessNames (solo sugerencia si no hay pista).
     if (!honorific && lead === a && b - a === 1 && words.slice(a, b + 1).every((w) => /^\p{Ll}/u.test(w.w))) continue;
     if (lead < a && claims.isFree(words[lead].s, words[b].e)) a = lead;
+    // «Firma: ana María Gómez»: un nombre de pila en minúscula con pista de contexto justo antes se suma al nombre con mayúsculas.
+    if (lead === a && a > 0 && a === runStart && /^\p{Ll}/u.test(words[a - 1].w) && FIRST_NAMES.has(fold(words[a - 1].w))
+      && onlySpaces.test(text.slice(words[a - 1].e, words[a].s)) && CUE_BEFORE.test(text.slice(Math.max(0, words[a - 1].s - 40), words[a - 1].s))
+      && claims.isFree(words[a - 1].s, words[b].e)) a = a - 1;
     if (claims.isFree(words[a].s, words[b].e)) claims.claim(words[a].s, words[b].e, 'PERSONA', SCORES.person);
   }
 }
