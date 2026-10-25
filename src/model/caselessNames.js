@@ -55,7 +55,9 @@ export function detectCaselessNames(text, isFree) {
     const hasSurname = content.slice(1).some((w) => SURNAMES.has(w.f));
     const after = CUE_AFTER.test(text.slice(run[run.length - 1].e, run[run.length - 1].e + 30));
     const ambiguous = style === 'lower' && AMBIGUOUS_FIRST_NAMES.has(first.f);
-    const strong = (hasSurname && !ambiguous) || cue || after;
+    // «fidel castro», todo en minúscula y solo dos palabras, sin pista: se sugiere, no se marca solo.
+    const bareLower = style === 'lower' && content.length === 2 && content.every((w) => styleOf(w.w) === 'lower');
+    const strong = (hasSurname && !ambiguous && !bareLower) || cue || after;
     found.push({ start: first.s, end: run[run.length - 1].e, weak: !strong });
     i = j;
   }

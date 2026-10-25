@@ -185,3 +185,24 @@ describe('nombres completos con una palabra en minúscula', () => {
     expect(people('Ana María compró paz y tranquilidad.').map(([v]) => v)).toEqual(['Ana María']);
   });
 });
+
+describe('nombre de pila en minúscula o apellido en minúscula', () => {
+  it.each([
+    ['Declaró fidel Castro ante el juez.', 'fidel Castro'],
+    ['Declaró FIDEL castro ante el juez.', 'FIDEL castro'],
+    ['Declaró Fidel castro ante el juez.', 'Fidel castro'],
+    ['Entregó Pablo gómez el sobre.', 'Pablo gómez']
+  ])('«%s»', (text, name) => {
+    expect(people(text)).toEqual([[name, 'fuerte']]);
+  });
+
+  it('todo en minúscula, con ambas palabras en las listas, solo se sugiere', () => {
+    expect(people('Declaró fidel castro ante el juez.')).toEqual([['fidel castro', 'débil']]);
+  });
+
+  it('no marca frases comunes', () => {
+    for (const text of ['Hay ríos de dinero en el proceso.', 'Se firmó la paz del acuerdo.', 'Los ríos de dinero y la paz del acuerdo.']) {
+      expect(people(text)).toEqual([]);
+    }
+  });
+});
