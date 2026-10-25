@@ -8,7 +8,7 @@ import {
 
 const WORD_RE = /[\p{L}][\p{L}'’]*/gu;
 const LINKS = new Set(['de', 'del', 'la', 'las', 'los']);
-const CUE_BEFORE = /(?:se[nñ]or(?:a|es|as)?|sr|sra|srta|don|do[nñ]a|ciudadan[oa]|identificad[oa]\s+con|c\.?\s?c\.?|a\s+favor\s+de|demandante|demandad[oa]|apoderad[oa]|accionante|firma|firmado\s+por|nombre)\s*[:.,]?\s*$/iu;
+const CUE_BEFORE = /(?:se[nñ]or(?:a|es|as)?|sr|sra|srta|dr|dra|doctora?|don|do[nñ]a|ciudadan[oa]|identificad[oa]\s+con|c\.?\s?c\.?|a\s+favor\s+de|demandante|demandad[oa]|apoderad[oa]|accionante|firma|firmado\s+por|nombre)\s*[:.,]?\s*$/iu;
 const CUE_AFTER = /^\s*,?\s*(?:identificad[oa]|c\.?\s?c\.?\s|con\s+c[eé]dula|mayor\s+de\s+edad|quien\s+se\s+identifica)/iu;
 const MAX_WORDS = 5;
 
@@ -36,7 +36,7 @@ export function detectCaselessNames(text, isFree) {
       const next = words[j + 1];
       const nextStyle = styleOf(next.w);
       // Todo el nombre en el mismo estilo; se admite «Juan carlos perez» (primera con mayúscula y el resto en minúscula).
-      const sameCase = nextStyle === style || (style === 'title' && nextStyle === 'lower') || LINKS.has(next.f);
+      const sameCase = nextStyle === style || (style === 'title' && nextStyle === 'lower') || (cue && style === 'lower' && nextStyle === 'title') || LINKS.has(next.f);
       if (!sameCase) break;
       const known = FIRST_NAMES.has(next.f) || SURNAMES.has(next.f) || LINKS.has(next.f);
       // Con pista de contexto se admite una palabra desconocida en medio («JORGE ELIÉCER GAITÁN»), nunca al final.
