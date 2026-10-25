@@ -33,7 +33,18 @@ function glued(edge, neighbor) {
   return false;
 }
 
-export function findOccurrences(text, needles) {
+/** Dos hallazgos de la misma entidad separados solo por espacios («Fidel» + «castro») son un solo tramo. */
+function joinAdjacent(text, list) {
+  const out = [];
+  for (const o of list) {
+    const last = out[out.length - 1];
+    if (last && last.id === o.id && o.start > last.end && /^[  ]+$/.test(text.slice(last.end, o.start))) last.end = o.end;
+    else out.push({ ...o });
+  }
+  return out;
+}
+
+export function findOccurrences(text, needles, { join = false } = {}) {
   if (!text) return [];
   const folded = fold(text);
   const candidates = [];
@@ -66,7 +77,8 @@ export function findOccurrences(text, needles) {
     taken.fill(1, c.start, c.end);
     result.push({ start: c.start, end: c.end, id: c.id });
   }
-  return result.sort((a, b) => a.start - b.start);
+  result.sort((a, b) => a.start - b.start);
+  return join ? joinAdjacent(text, result) : result;
 }
 
 export function searchRanges(text, query) {
