@@ -63,3 +63,23 @@ describe('App', () => {
     cleanup();
   }, 15000);
 });
+
+describe('reducer: undo/redo de add-alias (T4)', () => {
+  it('add -> undo -> redo devuelve entidades y salida exactos', async () => {
+    const { anonymizerReducer, initialState } = await import('../src/viewmodels/anonymizerState.js');
+    const { buildEntities, analyze } = await import('../src/model/index.js');
+    const paragraphs = [{ text: 'Fidel Castro firmó. Luego castro llegó.' }];
+    const entities = buildEntities(paragraphs);
+    const id = entities.find((e) => /fidel/i.test(e.value ?? e.aliases?.[0] ?? e.label)).id;
+    const start = { ...initialState, loaded: true, entities };
+    const out = (s) => JSON.stringify(analyze(paragraphs, s.entities, s.excluded));
+    const added = anonymizerReducer(start, { type: 'add-alias', id, text: 'castro' });
+    expect(added.entities).not.toEqual(start.entities);
+    const undone = anonymizerReducer(added, { type: 'undo' });
+    expect(undone.entities).toEqual(start.entities);
+    expect(out(undone)).toBe(out(start));
+    const redone = anonymizerReducer(undone, { type: 'redo' });
+    expect(redone.entities).toEqual(added.entities);
+    expect(out(redone)).toBe(out(added));
+  });
+});
