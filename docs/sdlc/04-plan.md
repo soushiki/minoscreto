@@ -37,3 +37,16 @@
   Function" src` shows nothing new vs `main` — files: `src/viewmodels/anonymizerState.js`, `tests/app.test.jsx` —
   model: Sonnet
   — hecho: reducer already restores exact snapshots; added add-alias → undo → redo test in `tests/app.test.jsx` (entities + analyze output equal); S1 grep clean; suite 148 green
+
+## Iteration 1 — fixes from 6-test (see 06-test-report.md)
+- [ ] FIX1 (S) Honorific + lowercase first name: «El señor fidel Castro firmó.», «La señora ana Gómez firmó.»,
+  «Firmó el doctor fidel Castro.» → one strong PERSONA span each (R1a) — done when: the cases are in the
+  `nombre de pila en minúscula…` block of `tests/addressesNames.test.js` and the suite stays green — files:
+  `src/model/detect.js` (honorific branch of `detectPeopleAndPrefixedOrgs`) — model: Sonnet
+- [ ] FIX2 (S) Don't let an excluded occurrence swallow its neighbour: join only when no part's own key is excluded
+  (keep parts separate otherwise) — done when: excluded «Fidel» + added «castro» still replaces «castro»; test in
+  `tests/model.test.js` — files: `src/model/text.js` (`joinAdjacent`), `src/model/analysis.js`,
+  `src/model/docx/anonymize.js` — model: Sonnet
+- [ ] FIX3 (XS) `readVariants`: accept only `Object.hasOwn(dict, k)` keys — done when: a `__variants__` with
+  `__proto__`/`toString` keys yields `{}` with an ordinary prototype; test in `tests/model.test.js` — files:
+  `src/model/dictionary.js` — model: Sonnet

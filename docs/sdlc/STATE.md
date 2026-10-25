@@ -5,7 +5,7 @@ goal: Detect person names in every casing permutation («Fidel castro», «fidel
 size: S
 exposed: yes    # yes → apply references/app-security.md (web, mobile, desktop, API)
 regulated: no   # yes → externally owned values rules (design + implement)
-next: 6-test
+next: 5-implement
 
 ## Stages
 - [x] 0-triage
@@ -13,8 +13,8 @@ next: 6-test
 - [x] 2-requirements   (approved 2026-10-24)
 - [~] 3-design         (gate: user approval)
 - [x] 4-plan
-- [x] 5-implement      current task: T4 (iteration 1 done)
-- [ ] 6-test
+- [x] 5-implement      current task: FIX1
+- [~] 6-test         (iteration 1: R1a failed → FIX1–3, re-run after)
 - [ ] 7-release
 - [~] 8-maintain
 
@@ -31,3 +31,4 @@ next: 6-test
 2026-10-24 | 5-implement | T2 done (Sonnet subagent): findOccurrences join merges same-entity hits split by spaces (text/docx/expediente); 141 tests green; user approved extra files → next T3
 2026-10-24 | 5-implement | T3 done (Opus): hidden __variants__ per occurrence, nth-variant restore with count-mismatch fallback, old dicts unchanged; 147 tests green; also touched protectedFiles.js + expediente/anonymize.js → next T4
 2026-10-24 | 5-implement | T4 done (Sonnet subagent): add-alias → undo → redo test (reducer unchanged, snapshots exact); S1 grep clean; 148 tests green; iteration 1 complete → next 6-test
+2026-10-24 | 6-test | FAIL R1a (honorific + lowercase first name untagged); review: exclusion swallowed by join (medium), hasOwn in readVariants (low); filed FIX1–3 → next 5-implement
