@@ -34,17 +34,19 @@ function glued(edge, neighbor) {
 }
 
 /** Dos hallazgos de la misma entidad separados solo por espacios («Fidel» + «castro») son un solo tramo. */
-function joinAdjacent(text, list) {
+function joinAdjacent(text, list, isExcluded) {
   const out = [];
   for (const o of list) {
     const last = out[out.length - 1];
-    if (last && last.id === o.id && o.start > last.end && /^[  ]+$/.test(text.slice(last.end, o.start))) last.end = o.end;
+    if (last && last.id === o.id && o.start > last.end && /^[  ]+$/.test(text.slice(last.end, o.start))
+      && !isExcluded(last.start) && !isExcluded(o.start)) last.end = o.end;
     else out.push({ ...o });
   }
   return out;
 }
 
-export function findOccurrences(text, needles, { join = false } = {}) {
+/** `isExcluded(start)`: una parte excluida por el usuario no se une a su vecina (queda como tramo propio). */
+export function findOccurrences(text, needles, { join = false, isExcluded = () => false } = {}) {
   if (!text) return [];
   const folded = fold(text);
   const candidates = [];
@@ -78,7 +80,7 @@ export function findOccurrences(text, needles, { join = false } = {}) {
     result.push({ start: c.start, end: c.end, id: c.id });
   }
   result.sort((a, b) => a.start - b.start);
-  return join ? joinAdjacent(text, result) : result;
+  return join ? joinAdjacent(text, result, isExcluded) : result;
 }
 
 export function searchRanges(text, query) {
