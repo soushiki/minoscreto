@@ -3,8 +3,10 @@ import JSZip from 'jszip';
 import {
   buildDocx, openDocx, buildEntities, exportAnonymized, restoreDocx, restoreText, buildDictionary,
   dictionaryToText, parseDictionary, analyze, findSuggestions, findHits, addValue, renameLabel,
-  setCategoryEnabled, retype, createEntity, addAlias, SAMPLE_PARAGRAPHS, findOccurrences, detect
+  setCategoryEnabled, retype, createEntity, addAlias, SAMPLE_PARAGRAPHS, findOccurrences, detect,
+  collectSources, dictionaryVariants, dictionaryJson
 } from '../src/model/index.js';
+import { anonymizeTexts } from '../src/model/expediente/index.js';
 
 const textsOf = async (blob) => {
   const doc = await openDocx(await blob.arrayBuffer());
@@ -151,5 +153,66 @@ describe('tramos contiguos de una misma entidad', () => {
     const buffer = await buildDocx(['Firmó Fidel castro hoy.']);
     const { blob } = await exportAnonymized(buffer, ents, new Set());
     expect(await textsOf(blob)).toContain('Firmó [PERSONA_1] hoy.');
+  });
+});
+
+describe('variantes por aparición', () => {
+  const DEMO = ['Firmó fidel Castro el contrato.', 'Testigo: FIDEL castro. Pagó Fidel castro', 'y luego castro se fue.'];
+  const fidel = () => {
+    const base = createEntity([], 'PERSONA', 'Fidel', true);
+    return addAlias([base], base.id, 'castro');
+  };
+
+  it('ida y vuelta: el Word restaurado repite el texto exacto de cada aparición', async () => {
+    const ents = fidel();
+    const buffer = await buildDocx(DEMO);
+    const doc = await openDocx(buffer);
+    const analysis = analyze(doc.paragraphs, ents, new Set());
+    const sources = collectSources(doc.paragraphs.map((p) => p.text), analysis.occurrences);
+    expect(sources[ents[0].id]).toEqual(['fidel Castro', 'FIDEL castro', 'Fidel castro', 'castro']);
+    const dict = buildDictionary(ents, analysis.usedIds, sources);
+    expect(Object.keys(dict)).toEqual(['[PERSONA_1]']);
+    const loaded = parseDictionary(dictionaryJson(dict));
+    expect(dictionaryVariants(loaded)).toEqual({ '[PERSONA_1]': ['fidel Castro', 'FIDEL castro', 'Fidel castro', 'castro'] });
+    expect(Object.keys(loaded)).toEqual(['[PERSONA_1]']);
+
+    const { blob } = await exportAnonymized(buffer, ents, new Set());
+    const restored = await restoreDocx(await blob.arrayBuffer(), loaded);
+    expect(await textsOf(restored.blob)).toEqual(DEMO);
+    const anonText = (await textsOf(blob)).join('\n');
+    expect(restoreText(anonText, loaded).text).toBe(DEMO.join('\n'));
+  });
+
+  it('el expediente guarda las mismas variantes y restaura su texto', () => {
+    const ents = fidel();
+    const applied = anonymizeTexts(DEMO, ents);
+    const dict = parseDictionary(dictionaryJson(buildDictionary(ents, new Set(applied.usedIds), applied.sources)));
+    expect(restoreText(applied.texts.join('\n'), dict).text).toBe(DEMO.join('\n'));
+  });
+
+  it('sin variantes distintas del valor no agrega la llave', () => {
+    const ents = [createEntity([], 'PERSONA', 'Ana Gómez', true)];
+    const dict = buildDictionary(ents, null, { [ents[0].id]: ['Ana Gómez', 'Ana Gómez'] });
+    expect(dictionaryJson(dict)).not.toContain('__variants__');
+  });
+
+  it('un diccionario de antes (sin variantes) restaura igual que siempre', () => {
+    const old = parseDictionary('{\n  "[PERSONA_1]": "Fidel castro",\n  "[CEDULA_1]": "45.521.884"\n}');
+    expect(dictionaryVariants(old)).toEqual({});
+    expect(restoreText('[PERSONA_1] ([CEDULA_1]) y [PERSONA_1].', old).text).toBe('Fidel castro (45.521.884) y Fidel castro.');
+  });
+
+  it('si el número de apariciones no cuadra, todas vuelven al valor principal', () => {
+    const dict = parseDictionary(JSON.stringify({ '[PERSONA_1]': 'Fidel', __variants__: { '[PERSONA_1]': ['Fidel castro', 'castro'] } }));
+    expect(restoreText('[PERSONA_1] y [PERSONA_1]', dict).text).toBe('Fidel castro y castro');
+    expect(restoreText('[PERSONA_1], [PERSONA_1] y [PERSONA_1]', dict).text).toBe('Fidel, Fidel y Fidel');
+  });
+
+  it('descarta variantes mal formadas o de etiquetas que no existen', () => {
+    const dict = parseDictionary(JSON.stringify({
+      '[PERSONA_1]': 'Ana', __variants__: { '[PERSONA_1]': ['ana', 3], '[PERSONA_9]': ['x'] }
+    }));
+    expect(dictionaryVariants(dict)).toEqual({});
+    expect(() => parseDictionary(JSON.stringify({ __variants__: { '[PERSONA_1]': ['x'] } }))).toThrow();
   });
 });

@@ -25,7 +25,7 @@
   `tests/model.test.js` and `tests/expediente.test.js` — files: `src/model/analysis.js` (`analyze`),
   `src/model/entities.js` (`addAlias`), `src/model/docx/edit.js` if ranges are applied there — model: Sonnet
   — hecho: `findOccurrences(…, { join: true })` in `text.js` merges same-entity hits separated only by spaces; used by `analyze`, docx and expediente anonymize (entities.js/edit.js untouched); 2 new tests; suite 141 green
-- [ ] T3 (M) Per-occurrence variants: `buildDictionary` records the exact source text of each occurrence (joined span
+- [x] T3 (M) Per-occurrence variants: `buildDictionary` records the exact source text of each occurrence (joined span
   = «Fidel castro», lone = «castro») under `__variants__`; `restoreText`/`restoreDocx` use the nth variant with the
   fallback above; `parseDictionary` keeps `__variants__` instead of dropping it — R2b/c, R3 — done when: round trip
   anonymize → restore returns the exact original (casing + spacing) for the demo doc; a pre-change dictionary

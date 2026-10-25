@@ -8,6 +8,7 @@ export function anonymizeTexts(texts, entities) {
   const counts = {};
   const usedIds = [];
   const used = new Set();
+  const sources = {};
   let replacements = 0;
   const out = texts.map((text) => {
     if (!text.trim()) return text;
@@ -17,12 +18,13 @@ export function anonymizeTexts(texts, entities) {
       const entity = byId.get(o.id);
       if (!entity.enabled) continue;
       ranges.push({ start: o.start, end: o.end, text: `[${entity.label}]` });
+      (sources[o.id] ||= []).push(text.slice(o.start, o.end));
       if (!used.has(o.id)) { used.add(o.id); usedIds.push(o.id); }
     }
     replacements += ranges.length;
     return ranges.length ? replaceInString(text, ranges) : text;
   });
-  return { texts: out, counts, usedIds, replacements };
+  return { texts: out, counts, usedIds, sources, replacements };
 }
 
 /** Índice de búsqueda: el texto plegado (sin tildes ni mayúsculas) conserva las posiciones del original. */

@@ -1,13 +1,13 @@
 // Archivos que se descargan al anonimizar: el documento protegido y su diccionario, con nombres que se ordenan juntos.
 import JSZip from 'jszip';
-import { parseDictionary } from './dictionary.js';
+import { dictionaryWithVariants, parseDictionary } from './dictionary.js';
 
 export const safeName = (name) => String(name || '').replace(/[\\/:*?"<>|]+/g, '-').trim() || 'documento';
 
 export const protectedFileName = (name, ext) => `${safeName(name)}_protegido.${ext}`;
 export const dictionaryFileName = (name) => `${safeName(name)}_diccionario.json`;
 
-export const dictionaryJson = (dictionary) => JSON.stringify(dictionary, null, 2);
+export const dictionaryJson = (dictionary) => JSON.stringify(dictionaryWithVariants(dictionary), null, 2);
 
 const isZip = (bytes) => bytes.length > 3 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
 
