@@ -25,4 +25,4 @@
 
 ## Releases
 <!-- date | version | result -->
-2026-10-24 | 0.3.0 | prepared and committed locally; push to main (Netlify deploy) + tag pending user approval; prod smoke pending
+2026-10-24 | 0.3.0 | pushed a4bd9f9 to main (Netlify deploy), tagged v0.3.0; prod smoke pending user

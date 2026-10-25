@@ -5,7 +5,7 @@ goal: Detect person names in every casing permutation («Fidel castro», «fidel
 size: S
 exposed: yes    # yes → apply references/app-security.md (web, mobile, desktop, API)
 regulated: no   # yes → externally owned values rules (design + implement)
-next: 7-release   (finish: push + tag + prod smoke, after user approval)
+next: 7-release   (prod smoke by user, then 8-maintain)
 
 ## Stages
 - [x] 0-triage
@@ -15,7 +15,7 @@ next: 7-release   (finish: push + tag + prod smoke, after user approval)
 - [x] 4-plan
 - [x] 5-implement      current task: — (FIX1–5 done)
 - [x] 6-test         (iteration 1 passes after FIX1–5; smoke pending user)
-- [~] 7-release      (0.3.0 prepared; deploy pending approval)
+- [~] 7-release      (0.3.0 deployed + tagged; prod smoke pending user)
 - [~] 8-maintain
 
 (Mark skipped stages `- [~]`.)
@@ -39,3 +39,4 @@ next: 7-release   (finish: push + tag + prod smoke, after user approval)
 2026-10-24 | 5-implement | FIX4 (detect.js cue-led lowercase first name joins capitalized run) + FIX5 (caselessNames ledSurname, places excluded after verify) done; 158 green
 2026-10-24 | 6-test | re-run 2: PASS, 158 green, all Musts pass; manual smoke pending user → next 7-release
 2026-10-24 | 7-release | 0.3.0 prepared: runbook, CHANGELOG, version bump; pre-flight clean (158 green, audit 0, no secrets); gap: no security headers; push/tag pending user
+2026-10-24 | 7-release | pushed main (a4bd9f9) → Netlify deploy, tag v0.3.0 pushed; prod smoke pending user
