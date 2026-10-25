@@ -5,3 +5,13 @@
 
 [build.environment]
   NODE_VERSION = "22"
+
+# La CSP la genera el build en dist/_headers (lleva los hashes de los scripts en línea).
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    X-Frame-Options = "DENY"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Strict-Transport-Security = "max-age=31536000"
