@@ -3,7 +3,7 @@
 import { fold } from './text.js';
 import {
   FIRST_NAMES, SURNAMES, AMBIGUOUS_FIRST_NAMES, STOP_WORDS, COMMON_CAPS, SENTENCE_STARTERS, INSTITUTION_WORDS, NAME_CUES,
-  ORG_PREFIXES, HONORIFICS, PLACES, ROLE_WORDS
+  ORG_PREFIXES, HONORIFICS, PLACES, ROLE_WORDS, NOT_NAMES
 } from './lexicon.js';
 
 const WORD_RE = /[\p{L}][\p{L}'’]*/gu;
@@ -39,12 +39,15 @@ export function detectCaselessNames(text, isFree) {
       const sameCase = nextStyle === style || (style === 'title' && nextStyle === 'lower') || (cue && style === 'lower' && nextStyle === 'title') || LINKS.has(next.f);
       if (!sameCase) break;
       const known = FIRST_NAMES.has(next.f) || SURNAMES.has(next.f) || LINKS.has(next.f);
+      // «Dra. lucía Paz»: con pista, un nombre de pila en minúscula seguido de una palabra con mayúscula que no es común (apellido fuera de la lista).
+      const ledSurname = cue && style === 'lower' && nextStyle === 'title' && next.f.length >= 3 && !STOP_WORDS.has(next.f) && !COMMON_CAPS.has(next.f)
+        && !SENTENCE_STARTERS.has(next.f) && !HONORIFICS.has(next.f) && !NAME_CUES.has(next.f) && !PLACES.has(next.f) && !NOT_NAMES.has(next.f) && j === i;
       // Con pista de contexto se admite una palabra desconocida en medio («JORGE ELIÉCER GAITÁN»), nunca al final.
       const after = words[j + 2];
       const plausible = cue && unknown < 2 && next.f.length >= 3 && !STOP_WORDS.has(next.f) && !COMMON_CAPS.has(next.f) && !SENTENCE_STARTERS.has(next.f)
         && after && spaced(j + 1, j + 2) && (FIRST_NAMES.has(after.f) || SURNAMES.has(after.f));
-      if (!known && !plausible) break;
-      if (!known) unknown++;
+      if (!known && !plausible && !ledSurname) break;
+      if (!known && !ledSurname) unknown++;
       j++;
       if (words.slice(i, j + 1).filter((w) => !LINKS.has(w.f)).length >= MAX_WORDS) break;
     }

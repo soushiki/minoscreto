@@ -195,7 +195,9 @@ describe('nombre de pila en minúscula o apellido en minúscula', () => {
     ['El señor fidel Castro firmó.', 'fidel Castro'],
     ['La señora ana Gómez firmó.', 'ana Gómez'],
     ['Firmó el doctor fidel Castro.', 'fidel Castro'],
-    ['Firma: ana María Gómez', 'ana María Gómez']
+    ['Firma: ana María Gómez', 'ana María Gómez'],
+    ['Dra. lucía Paz llegó.', 'lucía Paz'],
+    ['El Dr. fidel Castro firmó.', 'fidel Castro']
   ])('«%s»', (text, name) => {
     expect(people(text)).toEqual([[name, 'fuerte']]);
   });
@@ -206,6 +208,12 @@ describe('nombre de pila en minúscula o apellido en minúscula', () => {
 
   it('una pista no hace nombre a lo que no lo es', () => {
     for (const text of ['El señor juez Castro decidió.', 'La doctora paz León habló.', 'El señor de la Torre llegó.']) expect(people(text)).toEqual([]);
+  });
+
+  it('una ciudad después de un nombre de pila en minúscula no es apellido', () => {
+    for (const [text, city] of [['Firma: juan Bogotá, marzo 2024.', 'Bogotá'], ['Señora rosa Medellín llegó.', 'Medellín']]) {
+      for (const [name] of people(text)) expect(name).not.toContain(city);
+    }
   });
 
   it('no marca frases comunes', () => {
