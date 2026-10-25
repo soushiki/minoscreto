@@ -45,7 +45,7 @@ function readVariants(raw, dict) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return variants;
   for (const [key, list] of Object.entries(raw)) {
     const k = key.trim();
-    if (dict[k] !== undefined && Array.isArray(list) && list.length && list.every((s) => typeof s === 'string')) variants[k] = list;
+    if (Object.hasOwn(dict, k) && Array.isArray(list) && list.length && list.every((s) => typeof s === 'string')) variants[k] = list;
   }
   return variants;
 }

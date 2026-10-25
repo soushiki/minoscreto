@@ -225,4 +225,11 @@ describe('variantes por aparición', () => {
     expect(dictionaryVariants(dict)).toEqual({});
     expect(() => parseDictionary(JSON.stringify({ __variants__: { '[PERSONA_1]': ['x'] } }))).toThrow();
   });
+
+  it('ignora llaves heredadas (__proto__, toString) en las variantes', () => {
+    const dict = parseDictionary('{"[PERSONA_1]": "Ana", "__variants__": {"__proto__": ["x"], "toString": ["y"]}}');
+    const v = dictionaryVariants(dict);
+    expect(v).toEqual({});
+    expect(Object.getPrototypeOf(v)).toBe(Object.prototype);
+  });
 });

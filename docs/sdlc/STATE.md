@@ -5,7 +5,7 @@ goal: Detect person names in every casing permutation («Fidel castro», «fidel
 size: S
 exposed: yes    # yes → apply references/app-security.md (web, mobile, desktop, API)
 regulated: no   # yes → externally owned values rules (design + implement)
-next: 5-implement
+next: 6-test
 
 ## Stages
 - [x] 0-triage
@@ -13,7 +13,7 @@ next: 5-implement
 - [x] 2-requirements   (approved 2026-10-24)
 - [~] 3-design         (gate: user approval)
 - [x] 4-plan
-- [x] 5-implement      current task: FIX3
+- [x] 5-implement      current task: — (FIX1–3 done)
 - [~] 6-test         (iteration 1: R1a failed → FIX1–3, re-run after)
 - [ ] 7-release
 - [~] 8-maintain
@@ -34,3 +34,4 @@ next: 5-implement
 2026-10-24 | 6-test | FAIL R1a (honorific + lowercase first name untagged); review: exclusion swallowed by join (medium), hasOwn in readVariants (low); filed FIX1–3 → next 5-implement
 2026-10-24 | 5-implement | FIX1 done (Sonnet subagent): fix in caselessNames.js (lowercase first name + Title surname after cue; dr/dra/doctor[a] cues), not detect.js; 151 tests green; user approved extra file, committed
 2026-10-24 | 5-implement | FIX2 done (Sonnet subagent): findOccurrences isExcluded option, excluded part never joins its neighbour; 152 tests green; expediente path has no exclusions, left as is → next FIX3
+2026-10-24 | 5-implement | FIX3 done (Sonnet subagent): readVariants uses Object.hasOwn; test fails pre-fix, 153 tests green; FIX1–3 complete → next 6-test (re-run iteration 1)
