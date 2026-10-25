@@ -5,7 +5,7 @@ goal: Detect person names in every casing permutation («Fidel castro», «fidel
 size: S
 exposed: yes    # yes → apply references/app-security.md (web, mobile, desktop, API)
 regulated: no   # yes → externally owned values rules (design + implement)
-next: 8-maintain   (first item: security headers in netlify.toml)
+next: 8-maintain   (security headers done locally; commit + deploy + live header check pending)
 
 ## Stages
 - [x] 0-triage
@@ -41,3 +41,4 @@ next: 8-maintain   (first item: security headers in netlify.toml)
 2026-10-24 | 7-release | 0.3.0 prepared: runbook, CHANGELOG, version bump; pre-flight clean (158 green, audit 0, no secrets); gap: no security headers; push/tag pending user
 2026-10-24 | 7-release | pushed main (a4bd9f9) → Netlify deploy, tag v0.3.0 pushed; prod smoke pending user
 2026-10-24 | 7-release | prod smoke PASS 4/4 (user); release 0.3.0 closed → next 8-maintain (security headers gap)
+2026-10-24 | 8-maintain | security headers XS: static headers in netlify.toml + build-generated hashed CSP (dist/_headers); local smoke clean, 158 green; commit/deploy pending user
