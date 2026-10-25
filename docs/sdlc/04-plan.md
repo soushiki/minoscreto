@@ -44,10 +44,11 @@
   `nombre de pila en minúscula…` block of `tests/addressesNames.test.js` and the suite stays green — files:
   `src/model/detect.js` (honorific branch of `detectPeopleAndPrefixedOrgs`) — model: Sonnet
   — hecho: cause was in `src/model/caselessNames.js` (lowercase honorific never enters a capitalized run): allow lower first name + Title surname when a cue precedes; added doctor/dr/dra cues; 3 cases added; suite 151 green
-- [ ] FIX2 (S) Don't let an excluded occurrence swallow its neighbour: join only when no part's own key is excluded
+- [x] FIX2 (S) Don't let an excluded occurrence swallow its neighbour: join only when no part's own key is excluded
   (keep parts separate otherwise) — done when: excluded «Fidel» + added «castro» still replaces «castro»; test in
   `tests/model.test.js` — files: `src/model/text.js` (`joinAdjacent`), `src/model/analysis.js`,
   `src/model/docx/anonymize.js` — model: Sonnet
+  — hecho: `findOccurrences` takes `isExcluded(start)`; `joinAdjacent` won't join a part whose own key is excluded; wired in analysis.js and docx/anonymize.js; 1 test added; suite 152 green
 - [ ] FIX3 (XS) `readVariants`: accept only `Object.hasOwn(dict, k)` keys — done when: a `__variants__` with
   `__proto__`/`toString` keys yields `{}` with an ordinary prototype; test in `tests/model.test.js` — files:
   `src/model/dictionary.js` — model: Sonnet

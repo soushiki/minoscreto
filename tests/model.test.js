@@ -82,6 +82,16 @@ describe('exportar y restaurar Word', () => {
     expect(text).toContain('[PERSONA_2]');
   });
 
+  it('una aparición excluida no se traga a su vecina al unir tramos', () => {
+    const paragraphs = [{ text: 'Fidel castro firmó.', index: 0 }];
+    const base = [createEntity([], 'PERSONA', 'Fidel', true)];
+    const ents = addAlias(base, base[0].id, 'castro');
+    const a = analyze(paragraphs, ents, new Set(['0:0']));
+    expect(a.occurrences[0].map((o) => [o.start, o.end, o.replaced])).toEqual([[0, 5, false], [6, 12, true]]);
+    const b = analyze(paragraphs, ents, new Set());
+    expect(b.occurrences[0].map((o) => [o.start, o.end, o.replaced])).toEqual([[0, 12, true]]);
+  });
+
   it('procesa encabezados y borra el autor del archivo', async () => {
     const zip = await JSZip.loadAsync(await buildDocx(SAMPLE_PARAGRAPHS));
     zip.file('word/header1.xml', '<?xml version="1.0"?><w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>Estudio Gómez y Asociados S.A.S. · Tel: 605 664 1234</w:t></w:r></w:p></w:hdr>');

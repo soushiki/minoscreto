@@ -13,7 +13,7 @@ export async function exportAnonymized(buffer, entities, excluded) {
   for (const paragraph of doc.paragraphs) {
     if (!paragraph.text.trim()) continue;
     const ranges = [];
-    for (const o of findOccurrences(paragraph.text, needles, { join: true })) {
+    for (const o of findOccurrences(paragraph.text, needles, { join: true, isExcluded: (s) => excluded.has(occurrenceKey(paragraph.index, s)) })) {
       const entity = byId.get(o.id);
       if (!entity.enabled || excluded.has(occurrenceKey(paragraph.index, o.start))) continue;
       ranges.push({ start: o.start, end: o.end, text: `[${entity.label}]` });

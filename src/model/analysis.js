@@ -11,7 +11,7 @@ export function analyze(paragraphs, entities, excluded) {
   let replacements = 0;
   const occurrences = paragraphs.map((p, pi) => {
     if (!p.text.trim()) return [];
-    return findOccurrences(p.text, needles, { join: true }).map((o) => {
+    return findOccurrences(p.text, needles, { join: true, isExcluded: (s) => excluded.has(occurrenceKey(pi, s)) }).map((o) => {
       const key = occurrenceKey(pi, o.start);
       const entity = byId.get(o.id);
       const replaced = entity.enabled && !excluded.has(key);
