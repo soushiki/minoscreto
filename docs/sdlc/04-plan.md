@@ -39,10 +39,11 @@
   — hecho: reducer already restores exact snapshots; added add-alias → undo → redo test in `tests/app.test.jsx` (entities + analyze output equal); S1 grep clean; suite 148 green
 
 ## Iteration 1 — fixes from 6-test (see 06-test-report.md)
-- [ ] FIX1 (S) Honorific + lowercase first name: «El señor fidel Castro firmó.», «La señora ana Gómez firmó.»,
+- [x] FIX1 (S) Honorific + lowercase first name: «El señor fidel Castro firmó.», «La señora ana Gómez firmó.»,
   «Firmó el doctor fidel Castro.» → one strong PERSONA span each (R1a) — done when: the cases are in the
   `nombre de pila en minúscula…` block of `tests/addressesNames.test.js` and the suite stays green — files:
   `src/model/detect.js` (honorific branch of `detectPeopleAndPrefixedOrgs`) — model: Sonnet
+  — hecho: cause was in `src/model/caselessNames.js` (lowercase honorific never enters a capitalized run): allow lower first name + Title surname when a cue precedes; added doctor/dr/dra cues; 3 cases added; suite 151 green
 - [ ] FIX2 (S) Don't let an excluded occurrence swallow its neighbour: join only when no part's own key is excluded
   (keep parts separate otherwise) — done when: excluded «Fidel» + added «castro» still replaces «castro»; test in
   `tests/model.test.js` — files: `src/model/text.js` (`joinAdjacent`), `src/model/analysis.js`,

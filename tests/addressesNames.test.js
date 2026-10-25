@@ -191,7 +191,10 @@ describe('nombre de pila en minúscula o apellido en minúscula', () => {
     ['Declaró fidel Castro ante el juez.', 'fidel Castro'],
     ['Declaró FIDEL castro ante el juez.', 'FIDEL castro'],
     ['Declaró Fidel castro ante el juez.', 'Fidel castro'],
-    ['Entregó Pablo gómez el sobre.', 'Pablo gómez']
+    ['Entregó Pablo gómez el sobre.', 'Pablo gómez'],
+    ['El señor fidel Castro firmó.', 'fidel Castro'],
+    ['La señora ana Gómez firmó.', 'ana Gómez'],
+    ['Firmó el doctor fidel Castro.', 'fidel Castro']
   ])('«%s»', (text, name) => {
     expect(people(text)).toEqual([[name, 'fuerte']]);
   });

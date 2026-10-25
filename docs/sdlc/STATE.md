@@ -13,7 +13,7 @@ next: 5-implement
 - [x] 2-requirements   (approved 2026-10-24)
 - [~] 3-design         (gate: user approval)
 - [x] 4-plan
-- [x] 5-implement      current task: FIX1
+- [x] 5-implement      current task: FIX2
 - [~] 6-test         (iteration 1: R1a failed → FIX1–3, re-run after)
 - [ ] 7-release
 - [~] 8-maintain
@@ -32,3 +32,4 @@ next: 5-implement
 2026-10-24 | 5-implement | T3 done (Opus): hidden __variants__ per occurrence, nth-variant restore with count-mismatch fallback, old dicts unchanged; 147 tests green; also touched protectedFiles.js + expediente/anonymize.js → next T4
 2026-10-24 | 5-implement | T4 done (Sonnet subagent): add-alias → undo → redo test (reducer unchanged, snapshots exact); S1 grep clean; 148 tests green; iteration 1 complete → next 6-test
 2026-10-24 | 6-test | FAIL R1a (honorific + lowercase first name untagged); review: exclusion swallowed by join (medium), hasOwn in readVariants (low); filed FIX1–3 → next 5-implement
+2026-10-24 | 5-implement | FIX1 done (Sonnet subagent): fix in caselessNames.js (lowercase first name + Title surname after cue; dr/dra/doctor[a] cues), not detect.js; 151 tests green; user approved extra file, committed
