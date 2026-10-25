@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import {
-  analyze, anonymizedText, buildDictionary, buildDocx, dictionaryFileName, dictionaryJson, DocxError, exportAnonymized, findHits, protectedFileName,
+  analyze, anonymizedText, buildDictionary, collectSources, buildDocx, dictionaryFileName, dictionaryJson, DocxError, exportAnonymized, findHits, protectedFileName,
   buildEntities, findSuggestions, openDocx, partLabel, renameLabel, SAMPLE_NAME, SAMPLE_PARAGRAPHS, countMatches
 } from '../model/index.js';
 import { anonymizerReducer, initialState } from './anonymizerState.js';
@@ -51,7 +51,10 @@ export function useAnonymizer({ save, notify }) {
 
   const entityIndex = useMemo(() => new Map(categoriesFlat(categories).map((e) => [e.id, e])), [categories]);
 
-  const dictionary = useMemo(() => (analysis ? buildDictionary(entities, analysis.usedIds) : {}), [entities, analysis]);
+  // Cada aparición guarda su texto exacto («Fidel castro», «castro») para que la restauración lo devuelva tal cual.
+  const dictionary = useMemo(() => (analysis
+    ? buildDictionary(entities, analysis.usedIds, collectSources(doc.paragraphs.map((p) => p.text), analysis.occurrences))
+    : {}), [doc, entities, analysis]);
   const replacements = analysis ? analysis.replacements : 0;
 
   const loadBuffer = useCallback(async (buffer, name, isSample) => {

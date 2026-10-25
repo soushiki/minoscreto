@@ -66,7 +66,7 @@ export function useExpediente({ save, notify }) {
     return acc;
   }, {}), [entities, counts]);
 
-  const dictionary = useMemo(() => (ready ? buildDictionary(entities, new Set(applied.usedIds)) : {}), [ready, entities, applied]);
+  const dictionary = useMemo(() => (ready ? buildDictionary(entities, new Set(applied.usedIds), applied.sources) : {}), [ready, entities, applied]);
 
   const suggestions = useMemo(() => {
     if (!fresh) return [];
