@@ -5,7 +5,7 @@ goal: Detect person names in every casing permutation («Fidel castro», «fidel
 size: S
 exposed: yes    # yes → apply references/app-security.md (web, mobile, desktop, API)
 regulated: no   # yes → externally owned values rules (design + implement)
-next: 5-implement
+next: 6-test
 
 ## Stages
 - [x] 0-triage
@@ -13,7 +13,7 @@ next: 5-implement
 - [x] 2-requirements   (approved 2026-10-24)
 - [~] 3-design         (gate: user approval)
 - [x] 4-plan
-- [ ] 5-implement      current task: T4
+- [x] 5-implement      current task: T4 (iteration 1 done)
 - [ ] 6-test
 - [ ] 7-release
 - [~] 8-maintain
@@ -30,3 +30,4 @@ next: 5-implement
 2026-10-24 | 5-implement | T1 done (Sonnet subagent): fidel Castro / FIDEL castro tagged whole, bare lowercase pair weak; 139 tests green; detection 23.9 vs 23.8 ms → next T2
 2026-10-24 | 5-implement | T2 done (Sonnet subagent): findOccurrences join merges same-entity hits split by spaces (text/docx/expediente); 141 tests green; user approved extra files → next T3
 2026-10-24 | 5-implement | T3 done (Opus): hidden __variants__ per occurrence, nth-variant restore with count-mismatch fallback, old dicts unchanged; 147 tests green; also touched protectedFiles.js + expediente/anonymize.js → next T4
+2026-10-24 | 5-implement | T4 done (Sonnet subagent): add-alias → undo → redo test (reducer unchanged, snapshots exact); S1 grep clean; 148 tests green; iteration 1 complete → next 6-test

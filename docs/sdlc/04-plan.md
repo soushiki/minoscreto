@@ -32,7 +32,8 @@
   fixture restores unchanged; mismatch count falls back — files: `src/model/dictionary.js`,
   `src/model/docx/restore.js`, `src/viewmodels/useAnonymizer.js`, `src/viewmodels/useExpediente.js`,
   `tests/model.test.js` — model: Opus
-- [ ] T4 (S) Undo/redo of `add-alias` returns the exact previous entities and output; S1 guard — R3, S1 — done when:
+- [x] T4 (S) Undo/redo of `add-alias` returns the exact previous entities and output; S1 guard — R3, S1 — done when:
   reducer test in `tests/app.test.jsx` (add → undo → redo) passes, and `grep -rnE "fetch\(|XMLHttpRequest|eval\(|new
   Function" src` shows nothing new vs `main` — files: `src/viewmodels/anonymizerState.js`, `tests/app.test.jsx` —
   model: Sonnet
+  — hecho: reducer already restores exact snapshots; added add-alias → undo → redo test in `tests/app.test.jsx` (entities + analyze output equal); S1 grep clean; suite 148 green
