@@ -169,7 +169,7 @@ function surnamesBefore(words, a, runStart, b) {
   // «Yurani lorena Paz Obando»: la palabra con mayúscula justo antes de un nombre de pila escrito en minúscula también
   // es un nombre de pila, aunque no esté en la lista.
   if (/^\p{Ll}/u.test(words[a].w) && isCapitalized(words[a - 1].w) && surnameLike(fold(words[a - 1].w))
-    && !SURNAMES.has(fold(words[a - 1].w))) return a - 1;
+    && !SURNAMES.has(fold(words[a - 1].w)) && !VERB_LIKE.test(fold(words[a - 1].w))) return a - 1;
   const before = words.slice(lead, a).map((w) => fold(w.w));
   if (!before.every(surnameLike)) return a;
   const onlyFirstNames = words.slice(a, b + 1).every((w) => FIRST_NAMES.has(fold(w.w)) || CONNECTORS.has(fold(w.w)));
@@ -226,6 +226,8 @@ function detectPeopleAndPrefixedOrgs(text, claims) {
     const lead = honorific ? a : surnamesBefore(words, a, runStart, b);
     const isName = (FIRST_NAMES.has(firstWord) && (count >= 2 || honorific || a - lead === 2)) || (honorific && !NOT_NAMES.has(firstWord));
     if (!isName) continue;
+    // «fidel castro» sin ninguna mayúscula: lo decide detectCaselessNames (solo sugerencia si no hay pista).
+    if (!honorific && lead === a && b - a === 1 && words.slice(a, b + 1).every((w) => /^\p{Ll}/u.test(w.w))) continue;
     if (lead < a && claims.isFree(words[lead].s, words[b].e)) a = lead;
     if (claims.isFree(words[a].s, words[b].e)) claims.claim(words[a].s, words[b].e, 'PERSONA', SCORES.person);
   }
