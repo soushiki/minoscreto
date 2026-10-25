@@ -9,6 +9,7 @@ import {
 } from '../src/model/index.js';
 import { buildPartsZip, renderParts, splitParts, anonymizeTexts } from '../src/model/expediente/index.js';
 import { DICTIONARY_DELAY } from '../src/viewmodels/useProtectedDownload.js';
+import { isAppleTouch } from '../src/viewmodels/platform.js';
 
 const encode = (s) => new TextEncoder().encode(s);
 let downloads;
@@ -66,6 +67,17 @@ describe('archivos protegidos', () => {
   });
 });
 
+describe('equipos táctiles de Apple', () => {
+  it('reconoce iPhone, iPad (también con iPadOS que se presenta como Mac) y deja fuera Mac y Android', () => {
+    expect(isAppleTouch({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X)' })).toBe(true);
+    expect(isAppleTouch({ userAgent: 'Mozilla/5.0 (iPad; CPU OS 16_0 like Mac OS X)' })).toBe(true);
+    expect(isAppleTouch({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', platform: 'MacIntel', maxTouchPoints: 5 })).toBe(true);
+    expect(isAppleTouch({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', platform: 'MacIntel', maxTouchPoints: 0 })).toBe(false);
+    expect(isAppleTouch({ userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8)', platform: 'Linux armv8l', maxTouchPoints: 5 })).toBe(false);
+    expect(isAppleTouch(null)).toBe(false);
+  });
+});
+
 describe('descarga y copia en la app', () => {
   it('Anonimizar: un clic baja el Word y luego el diccionario, con lista y botón para repetir el diccionario', async () => {
     const user = userEvent.setup();
@@ -92,6 +104,29 @@ describe('descarga y copia en la app', () => {
     expect(copied).toContain('[PERSONA_1]');
     expect(copied).not.toContain('Laura Patricia Ortega');
     await waitFor(() => expect(document.querySelector('.toast').textContent).toMatch(/quedó copiado/));
+  }, 20000);
+
+  it('iPhone/iPad: el diccionario espera un toque y solo entonces queda marcado', async () => {
+    Object.defineProperty(navigator, 'userAgent', { value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15', configurable: true });
+    try {
+      const user = userEvent.setup();
+      render(<App />);
+      await goToTools(user);
+      await waitFor(() => expect(document.body.textContent).toContain('[EMPRESA_1]'), { timeout: 8000 });
+      await user.click(screen.getByRole('button', { name: 'Descargar' }));
+      await waitFor(() => expect(downloads[0]).toMatch(/_protegido\.docx$/), { timeout: 4000 });
+      await new Promise((r) => setTimeout(r, DICTIONARY_DELAY + 300));
+      expect(downloads).toHaveLength(1);
+      expect(document.querySelectorAll('.dl-mark.ok')).toHaveLength(1);
+      expect(screen.queryByRole('button', { name: 'Descargar diccionario de nuevo' })).toBeNull();
+
+      await user.click(screen.getByRole('button', { name: 'Descargar diccionario' }));
+      await waitFor(() => expect(downloads[1]).toMatch(/_diccionario\.json$/));
+      await waitFor(() => expect(document.querySelectorAll('.dl-mark.ok')).toHaveLength(2));
+      expect(screen.getByRole('button', { name: 'Descargar diccionario de nuevo' })).toBeTruthy();
+    } finally {
+      delete navigator.userAgent;
+    }
   }, 20000);
 
   it('Expediente de un archivo: documento y diccionario por separado, en ese orden', async () => {

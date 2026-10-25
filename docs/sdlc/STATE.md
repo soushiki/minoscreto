@@ -5,7 +5,7 @@ goal: Detect person names in every casing permutation («Fidel castro», «fidel
 size: S
 exposed: yes    # yes → apply references/app-security.md (web, mobile, desktop, API)
 regulated: no   # yes → externally owned values rules (design + implement)
-next: 8-maintain   (no open items; monthly checklist due 2026-11)
+next: 8-maintain   (open: iOS dictionary fix needs deploy + device test; monthly checklist due 2026-11)
 
 ## Stages
 - [x] 0-triage
@@ -44,3 +44,4 @@ next: 8-maintain   (no open items; monthly checklist due 2026-11)
 2026-10-24 | 8-maintain | security headers XS: static headers in netlify.toml + build-generated hashed CSP (dist/_headers); local smoke clean, 158 green; commit/deploy pending user
 2026-10-24 | 8-maintain | headers deployed (21a2e2d): live headers + CSP hash verified, prod PDF smoke OK; Netlify HUD script blocked by CSP (harmless)
 2026-10-24 | 8-maintain | checked: no open items; next monthly checklist 2026-11 (deps+audit, DORA, logs, prune docs/sdlc to archive/)
+2026-10-25 | 8-maintain | iOS/iPadOS: dictionary now needs an explicit tap, ticked only after it (platform.js); 160 green; deploy + device test pending user
