@@ -1,6 +1,19 @@
-# Minoscreto (React)
+# Minoscreto
 
-Anonimiza documentos Word antes de usar IA y restaura los nombres después. Todo corre en el navegador.
+[![tests](https://github.com/soushiki/minoscreto/actions/workflows/test.yml/badge.svg)](https://github.com/soushiki/minoscreto/actions/workflows/test.yml)
+
+**Live:** https://minoscreto.netlify.app
+
+Anonimiza documentos Word y expedientes PDF antes de usar IA y restaura los nombres después. Todo corre en el navegador: el documento nunca sale del computador.
+
+*In English:* a browser-only tool for Colombian legal documents. It replaces names, ID numbers (cédulas) and other personal data with tags like `[PERSONA_1]` before the text goes to an AI, then puts the real names back into the AI's answer. Built with React 19 and Vite; 160 automated tests (Vitest + Testing Library) run on every push.
+
+![Minoscreto welcome screen](docs/screenshot.jpg)
+
+## Pruebas
+- 160 pruebas en 10 archivos (`tests/`): detección de nombres, direcciones y cédulas, división de líneas, puntajes, expediente PDF/Word, descargas y la interfaz.
+- Corren en cada push con GitHub Actions (`.github/workflows/test.yml`): `npm ci`, `npm test`, `npm run build`.
+- `npm run eval` mide el recall y la precisión de la detección con documentos reales etiquetados, que viven fuera del repo (Ley 1581).
 
 ## Comandos
 - `npm install`
