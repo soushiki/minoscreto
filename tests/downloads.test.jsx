@@ -90,7 +90,7 @@ describe('descarga y copia en la app', () => {
     await user.click(screen.getByRole('button', { name: 'Descargar' }));
     await waitFor(() => expect(downloads[0]).toMatch(/_protegido\.docx$/), { timeout: 4000 });
     const base = downloads[0].replace(/_protegido\.docx$/, '');
-    expect(document.querySelector('.dl-receipt').textContent).toContain('Guarde el diccionario');
+    await waitFor(() => expect(document.querySelector('.dl-receipt')?.textContent).toContain('Guarde el diccionario'));
     await waitFor(() => expect(downloads).toEqual([`${base}_protegido.docx`, `${base}_diccionario.json`]), { timeout: DICTIONARY_DELAY + 2000 });
     await waitFor(() => expect(document.querySelectorAll('.dl-mark.ok')).toHaveLength(2));
 
