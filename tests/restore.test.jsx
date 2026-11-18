@@ -1,0 +1,171 @@
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { readFileSync } from 'node:fs';
+import App from '../src/App.jsx';
+import { buildDocx, openDocx } from '../src/model/index.js';
+
+// pdf.js sin worker real: el mismo montaje que tests/expediente.test.js
+// slowFirstDestroy: la primera lectura tarda en fallar tras abortarla, como un pdf.js ocupado (carrera con la lectura nueva).
+const slow = vi.hoisted(() => ({ on: false }));
+vi.mock('pdfjs-dist', async () => {
+  const lib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  return {
+    ...lib,
+    GlobalWorkerOptions: {},
+    getDocument: (...args) => {
+      const task = lib.getDocument(...args);
+      if (slow.on) {
+        slow.on = false;
+        const original = task.promise;
+        const delayed = original.then((v) => v, (e) => new Promise((_, reject) => { setTimeout(() => reject(e), 400); }));
+        Object.defineProperty(task, 'promise', { get: () => delayed });
+      }
+      return task;
+    }
+  };
+});
+vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?worker&inline', () => ({ default: class {} }));
+
+const DICT = {
+  '[PERSONA_1]': 'Ana Gómez', '[PERSONA_2]': 'Luis Pérez', '[EMPRESA_1]': 'Acme SAS',
+  '[DIRECCION_1]': 'Calle 1 # 2-3', '[CEDULA_1]': '123', '[TELEFONO_1]': '300'
+};
+const RIGHT = 'minoscreto-prueba';
+let saved;
+
+const fixture = (name) => new File([readFileSync(`tests/fixtures/${name}.pdf`)], `${name}.pdf`, { type: 'application/pdf' });
+const toBytes = (blob) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(new Uint8Array(reader.result));
+  reader.onerror = reject;
+  reader.readAsArrayBuffer(blob);
+});
+async function textOf(blob) {
+  const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const pdf = await getDocument({ data: await toBytes(blob), verbosity: 0 }).promise;
+  let out = '';
+  for (let n = 1; n <= pdf.numPages; n++) out += (await (await pdf.getPage(n)).getTextContent()).items.map((i) => i.str).join(' ');
+  return out;
+}
+
+async function openRestore(user, dict = DICT) {
+  render(<App />);
+  await user.click(screen.getByRole('button', { name: /Recuperar los nombres reales/ }));
+  if (dict) {
+    const input = document.querySelector('input[type="file"][accept*=".zip"]');
+    fireEvent.change(input, { target: { files: [new File([JSON.stringify(dict)], 'caso_diccionario.json')] } });
+    await waitFor(() => expect(document.body.textContent).toContain(`${Object.keys(dict).length} etiquetas`));
+  }
+  await user.click(screen.getByRole('button', { name: 'Archivo' }));
+}
+const fileInput = () => document.querySelector('input[type="file"][accept*=".pdf"]');
+const upload = (file) => fireEvent.change(fileInput(), { target: { files: [file] } });
+const downloadButton = () => screen.findByRole('button', { name: /Descargar .* restaurado/ });
+const openDialog = () => document.querySelector('dialog.pw-dialog[open]');
+
+beforeAll(() => {
+  window.scrollTo = () => {};
+  window.ResizeObserver = window.ResizeObserver || class { observe() {} disconnect() {} unobserve() {} };
+});
+beforeEach(() => {
+  window.localStorage.clear();
+  saved = [];
+  URL.createObjectURL = vi.fn((blob) => { saved.push({ blob }); return 'blob:prueba'; });
+  URL.revokeObjectURL = vi.fn();
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function click() { saved[saved.length - 1].name = this.download; });
+});
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+describe('Restaurar: pestaña Archivo con .pdf (T10: R3, R5)', () => {
+  it('la pestaña «Word» ahora se llama «Archivo» y acepta .docx y .pdf', async () => {
+    await openRestore(userEvent.setup(), null);
+    expect(screen.queryByRole('button', { name: /Subir Word/ })).toBeNull();
+    expect(fileInput().getAttribute('accept')).toContain('.docx');
+    expect(screen.getByRole('button', { name: /Elegir archivo \(\.docx o \.pdf\)/ })).toBeTruthy();
+  });
+
+  it.each([
+    ['etiquetas_fin_de_linea_sintetico', ['Acme SAS', 'Luis Pérez', 'Calle 1 # 2-3']],
+    ['chrome_guardar_como_sintetico', ['Calle 1 # 2-3']]
+  ])('restaura %s a los valores originales y guarda <nombre>-restaurado.pdf', async (name, values) => {
+    const user = userEvent.setup();
+    await openRestore(user);
+    upload(fixture(name));
+    await user.click(await downloadButton());
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0].name).toBe(`${name}-restaurado.pdf`);
+    const text = await textOf(saved[0].blob);
+    for (const v of values) expect(text).toContain(v);
+    expect(text).not.toMatch(/\[(PERSONA|EMPRESA|DIRECCION|CEDULA|TELEFONO)_/);
+  }, 20000);
+
+  it('lista los fragmentos que no pudo unir junto con las etiquetas sin entrada', async () => {
+    const user = userEvent.setup();
+    const partial = { ...DICT };
+    delete partial['[PERSONA_2]'];
+    await openRestore(user, partial);
+    upload(fixture('etiquetas_fin_de_linea_sintetico'));
+    await waitFor(() => expect(document.body.textContent).toContain('Sin entrada en el diccionario'));
+    expect(document.querySelector('.note').textContent).toMatch(/\[PERSONA_/);
+  }, 20000);
+
+  it('PDF con contraseña: pregunta en el diálogo, restaura con la correcta y cierra el diálogo', async () => {
+    const user = userEvent.setup();
+    await openRestore(user);
+    upload(fixture('contrasena_usuario_sintetico'));
+    await waitFor(() => expect(openDialog()).toBeTruthy());
+    await user.type(openDialog().querySelector('input'), `${RIGHT}{Enter}`);
+    await user.click(await downloadButton());
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0].name).toBe('contrasena_usuario_sintetico-restaurado.pdf');
+    expect(openDialog()).toBeNull();
+  }, 20000);
+
+  it('un segundo PDF mientras el primero espera contraseña: el diálogo sigue abierto para el segundo y restaura', async () => {
+    const user = userEvent.setup();
+    await openRestore(user);
+    slow.on = true;
+    upload(fixture('contrasena_usuario_sintetico'));
+    await waitFor(() => expect(openDialog()).toBeTruthy());
+    const second = new File([readFileSync('tests/fixtures/contrasena_usuario_sintetico.pdf')], 'segundo.pdf', { type: 'application/pdf' });
+    upload(second);
+    await waitFor(() => expect(openDialog()?.textContent).toContain('segundo.pdf'));
+    await new Promise((r) => setTimeout(r, 700)); // deja correr el finally de la lectura vieja
+    expect(openDialog()?.textContent).toContain('segundo.pdf');
+    await user.type(openDialog().querySelector('input'), `${RIGHT}{Enter}`);
+    await user.click(await downloadButton());
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0].name).toBe('segundo-restaurado.pdf');
+  }, 20000);
+
+  it('Cancelar la contraseña aborta la lectura: sin resultado, sin aviso de error y sin diálogo', async () => {
+    const user = userEvent.setup();
+    await openRestore(user);
+    upload(fixture('contrasena_usuario_sintetico'));
+    await waitFor(() => expect(openDialog()).toBeTruthy());
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+    await waitFor(() => expect(openDialog()).toBeNull());
+    expect(screen.queryByRole('button', { name: /Descargar .* restaurado/ })).toBeNull();
+    expect(document.body.textContent).not.toMatch(/No se pudo procesar|No se abrió/);
+  }, 20000);
+
+  it('un archivo que no es .docx ni .pdf se rechaza', async () => {
+    const user = userEvent.setup();
+    await openRestore(user);
+    upload(new File(['x'], 'nota.txt'));
+    await waitFor(() => expect(document.body.textContent).toContain('Sube un Word (.docx) o un PDF.'));
+  });
+
+  it('.docx sigue restaurándose igual y se guarda como .docx', async () => {
+    const user = userEvent.setup();
+    await openRestore(user);
+    const buffer = await buildDocx(['Según [PERSONA_1] y [EMPRESA_1].']);
+    upload(new File([buffer], 'resp.docx'));
+    await user.click(await screen.findByRole('button', { name: 'Descargar Word restaurado' }));
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0].name).toBe('resp-restaurado.docx');
+    const doc = await openDocx(await toBytes(saved[0].blob));
+    expect(doc.paragraphs.map((p) => p.text).join('\n')).toContain('Según Ana Gómez y Acme SAS.');
+  }, 20000);
+});

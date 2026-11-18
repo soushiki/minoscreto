@@ -1,5 +1,29 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { buildDocx, DOCX_MIME, readDictionaryFrom, restoreDocx, restoreText } from '../model/index.js';
+import { readPdfPages } from '../model/expediente/pdfjs.js';
+import { rejoinTags } from '../model/pdf/rejoin.js';
+import { usePasswordPrompt } from './usePasswordPrompt.js';
+
+const isPdf = (name) => /\.pdf$/i.test(name);
+const lineText = (line) => (typeof line === 'string' ? line : line.text);
+
+// PDF → texto (C1) → etiquetas partidas vueltas a unir (C5) → valores reales → PDF nuevo (C4, solo bajo demanda).
+async function restorePdf(buffer, dictionary, { askPassword, fileName, signal }) {
+  const pages = await readPdfPages(new Uint8Array(buffer), { askPassword, fileName, signal });
+  const joined = rejoinTags(pages.map((p) => p.lines.map(lineText).join('\n')).join('\n'), dictionary);
+  const restored = restoreText(joined.text, dictionary);
+  const { writeTextPdf } = await import('../model/pdf/writer.js'); // ADR-001: pdf-lib solo se carga al escribir
+  const { bytes, dropped } = await writeTextPdf({ lines: restored.text.split('\n') });
+  return {
+    kind: 'pdf',
+    blob: new Blob([bytes], { type: 'application/pdf' }),
+    counts: restored.counts,
+    // Los fragmentos de etiqueta que no se pudieron unir se listan junto a las etiquetas sin entrada.
+    unknown: [...restored.unknown, ...joined.broken.filter((b) => !restored.unknown.includes(b))],
+    broken: joined.broken,
+    dropped
+  };
+}
 
 export function useRestorer({ save, notify }) {
   const [dictionary, setDictionary] = useState(null);
@@ -9,6 +33,9 @@ export function useRestorer({ save, notify }) {
   const [word, setWord] = useState(null);
   const [wordResult, setWordResult] = useState(null);
   const deferredText = useDeferredValue(pasted);
+  const abortRef = useRef(null);
+  const passwordPrompt = usePasswordPrompt({ onCancel: () => abortRef.current?.abort() });
+  const { askPassword, close: closePrompt } = passwordPrompt;
 
   const pastedResult = useMemo(
     () => (dictionary && deferredText.trim() ? restoreText(deferredText, dictionary) : null),
@@ -18,11 +45,26 @@ export function useRestorer({ save, notify }) {
   useEffect(() => {
     if (!word || !dictionary) { setWordResult(null); return undefined; }
     let cancelled = false;
-    restoreDocx(word.buffer, dictionary)
-      .then((result) => { if (!cancelled) setWordResult(result); })
-      .catch(() => { if (!cancelled) { setWordResult(null); notify('No se pudo procesar el Word.', true); } });
-    return () => { cancelled = true; };
-  }, [word, dictionary, notify]);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const run = word.kind === 'pdf'
+      ? restorePdf(word.buffer, dictionary, { askPassword, fileName: word.name, signal: controller.signal })
+      : restoreDocx(word.buffer, dictionary);
+    run
+      .then((result) => {
+        if (cancelled) return;
+        setWordResult(result);
+        if (result.dropped?.length) notify('Algunos caracteres no se pueden escribir en el PDF y se omitieron.');
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setWordResult(null);
+        if (error?.code === 'aborted' || error?.code === 'cancelled') return; // el usuario canceló: sin aviso
+        notify(word.kind === 'pdf' ? (error?.message || 'No se pudo procesar el PDF.') : 'No se pudo procesar el Word.', true);
+      })
+      .finally(() => { if (word.kind === 'pdf' && !cancelled) closePrompt(); }); // si ya no es la lectura vigente, otra pregunta puede estar abierta
+    return () => { cancelled = true; controller.abort(); };
+  }, [word, dictionary, notify, askPassword, closePrompt]);
 
   const loadDictionary = useCallback((dict, name) => { setDictionary(dict); setDictionaryName(name); }, []);
 
@@ -35,9 +77,9 @@ export function useRestorer({ save, notify }) {
 
   const readWordFile = useCallback(async (file) => {
     if (!file) return;
-    if (!/\.docx$/i.test(file.name)) { notify('Sube un Word (.docx).', true); return; }
+    if (!/\.docx$/i.test(file.name) && !isPdf(file.name)) { notify('Sube un Word (.docx) o un PDF.', true); return; }
     try {
-      setWord({ name: file.name, buffer: await file.arrayBuffer() });
+      setWord({ name: file.name, kind: isPdf(file.name) ? 'pdf' : 'docx', buffer: await file.arrayBuffer() });
       if (!dictionary) notify('Primero elige el diccionario.', true);
     } catch { notify('No se pudo leer el archivo.', true); }
   }, [dictionary, notify]);
@@ -56,11 +98,13 @@ export function useRestorer({ save, notify }) {
 
   const downloadRestoredWord = useCallback(async () => {
     if (!wordResult) return;
-    if (await save(`${word.name.replace(/\.docx$/i, '')}-restaurado.docx`, wordResult.blob)) notify('Word restaurado guardado.');
+    const pdf = word.kind === 'pdf';
+    const name = `${word.name.replace(/\.(docx|pdf)$/i, '')}-restaurado.${pdf ? 'pdf' : 'docx'}`;
+    if (await save(name, wordResult.blob)) notify(pdf ? 'PDF restaurado guardado.' : 'Word restaurado guardado.');
   }, [wordResult, word, save, notify]);
 
   return {
     dictionary, dictionaryName, mode, pasted, word, wordResult, pastedResult,
-    setMode, setPasted, loadDictionary, readDictionaryFile, readWordFile, copyText, downloadPastedAsWord, downloadRestoredWord
+    passwordPrompt, setMode, setPasted, loadDictionary, readDictionaryFile, readWordFile, copyText, downloadPastedAsWord, downloadRestoredWord
   };
 }
