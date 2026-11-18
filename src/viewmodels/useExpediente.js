@@ -2,6 +2,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useReducer, useRef }
 import {
   buildDictionary, bundleFileName, dictionaryFileName, dictionaryJson, DocxError, exportCode, protectedFileName, renameLabel
 } from '../model/index.js';
+import { OMITTED_CHARS } from './messages.js';
 import {
   buildPartsZip, buildSearchIndex, estimateTokens, formatPageRanges, renderParts, renderWhole, searchIndex, splitParts, unitOf
 } from '../model/expediente/index.js';
@@ -174,14 +175,14 @@ export function useExpediente({ save, notify }) {
       if (rendered.length === 1 && state.kind === 'pdf') {
         const { writeTextPdf } = await import('../model/pdf/writer.js');
         const { bytes, dropped } = await writeTextPdf({ lines: rendered[0].text.split('\n') });
-        if (dropped.length) notify('Algunos caracteres no se pueden escribir en el PDF y se omitieron. Revisa el archivo.', true);
+        if (dropped.length) notify(OMITTED_CHARS, true);
         await downloadPair({ name: protectedFileName(code, 'pdf'), blob: new Blob([bytes], { type: 'application/pdf' }) }, dict);
       } else if (rendered.length === 1) {
         await downloadPair({ name: protectedFileName(code, 'md'), blob: new Blob([rendered[0].text], { type: 'text/markdown;charset=utf-8' }) }, dict);
       } else {
         const blob = await buildPartsZip({
           name: state.name, code, parts: rendered, dictionary, pdf: state.kind === 'pdf',
-          onDropped: () => notify('Algunos caracteres no se pueden escribir en el PDF y se omitieron. Revisa el archivo.', true)
+          onDropped: () => notify(OMITTED_CHARS, true)
         });
         await downloadBundle({ name: bundleFileName(state.name, code), blob }, dict);
       }

@@ -4,6 +4,7 @@ import { readPdfPages } from '../model/expediente/pdfjs.js';
 import { rejoinTags } from '../model/pdf/rejoin.js';
 import { stripAiHeader, stripPageMarkers } from '../model/expediente/render.js';
 import { usePasswordPrompt } from './usePasswordPrompt.js';
+import { OMITTED_CHARS } from './messages.js';
 
 const isPdf = (name) => /\.pdf$/i.test(name);
 const lineText = (line) => (typeof line === 'string' ? line : line.text);
@@ -11,22 +12,24 @@ const lineText = (line) => (typeof line === 'string' ? line : line.text);
 const OUR_FOOTER = /^\s*Página \d+ de \d+\s*$/;
 const withoutOurFooter = (lines) => (lines.length && OUR_FOOTER.test(lines[lines.length - 1]) ? lines.slice(0, -1) : lines);
 
-// PDF → texto (C1) → etiquetas partidas vueltas a unir (C5) → valores reales → PDF nuevo (C4, solo bajo demanda).
-async function restorePdf(buffer, dictionary, { askPassword, fileName, signal }) {
+// PDF → texto (C1). Solo depende del archivo: se lee (y se pide la contraseña) una vez, no al cambiar de diccionario.
+async function readPdfText(buffer, { askPassword, fileName, signal }) {
   const pages = await readPdfPages(new Uint8Array(buffer), { askPassword, fileName, signal });
-  const joined = rejoinTags(pages.map((p) => withoutOurFooter(p.lines.map(lineText)).join('\n')).join('\n'), dictionary);
+  return pages.map((p) => withoutOurFooter(p.lines.map(lineText)).join('\n')).join('\n');
+}
+
+// Texto del PDF → etiquetas partidas vueltas a unir (C5) → valores reales. Rápido: se repite con cada diccionario.
+function restorePdfText(text, dictionary) {
+  const joined = rejoinTags(text, dictionary);
   const restored = restoreText(joined.text, dictionary);
-  const { writeTextPdf } = await import('../model/pdf/writer.js'); // ADR-001: pdf-lib solo se carga al escribir
-  // El encabezado para la IA («(anonimizado)», notas de etiquetas) y las marcas [Folio N] no son parte del documento.
-  const { bytes, dropped } = await writeTextPdf({ lines: stripPageMarkers(stripAiHeader(restored.text)).split('\n') });
   return {
     kind: 'pdf',
-    blob: new Blob([bytes], { type: 'application/pdf' }),
+    // El encabezado para la IA («(anonimizado)», notas de etiquetas) y las marcas [Folio N] no son parte del documento.
+    text: stripPageMarkers(stripAiHeader(restored.text)),
     counts: restored.counts,
     // Los fragmentos de etiqueta que no se pudieron unir se listan junto a las etiquetas sin entrada.
     unknown: [...restored.unknown, ...joined.broken.filter((b) => !restored.unknown.includes(b))],
-    broken: joined.broken,
-    dropped
+    broken: joined.broken
   };
 }
 
@@ -36,9 +39,10 @@ export function useRestorer({ save, notify }) {
   const [mode, setMode] = useState('paste');
   const [pasted, setPasted] = useState('');
   const [word, setWord] = useState(null);
-  // El resultado guarda de qué archivo y diccionario salió: uno viejo nunca se muestra ni descarga con el nombre del nuevo.
-  const [restored, setRestored] = useState(null);
-  const wordResult = restored && restored.word === word && restored.dictionary === dictionary ? restored.result : null;
+  // Cada resultado guarda de qué archivo (y diccionario) salió: uno viejo nunca se muestra ni descarga con el nombre del nuevo.
+  const [docxRestored, setDocxRestored] = useState(null);
+  const [pdfText, setPdfText] = useState(null);
+  const hasDictionary = Boolean(dictionary);
   const deferredText = useDeferredValue(pasted);
   const abortRef = useRef(null);
   const passwordPrompt = usePasswordPrompt({ onCancel: () => abortRef.current?.abort() });
@@ -49,29 +53,37 @@ export function useRestorer({ save, notify }) {
     [dictionary, deferredText]
   );
 
+  // PDF: se lee al tener archivo y diccionario; cambiar de diccionario no lo vuelve a leer ni a pedir la contraseña (FIX-4).
   useEffect(() => {
-    if (!word || !dictionary) { setRestored(null); return undefined; }
+    if (!word || word.kind !== 'pdf' || !hasDictionary) return undefined;
     let cancelled = false;
     const controller = new AbortController();
     abortRef.current = controller;
-    const run = word.kind === 'pdf'
-      ? restorePdf(word.buffer, dictionary, { askPassword, fileName: word.name, signal: controller.signal })
-      : restoreDocx(word.buffer, dictionary);
-    run
-      .then((result) => {
-        if (cancelled) return;
-        setRestored({ word, dictionary, result });
-        if (result.dropped?.length) notify('Algunos caracteres no se pueden escribir en el PDF y se omitieron. Revisa el archivo.', true);
-      })
+    readPdfText(word.buffer, { askPassword, fileName: word.name, signal: controller.signal })
+      .then((text) => { if (!cancelled) setPdfText({ word, text }); })
       .catch((error) => {
         if (cancelled) return;
-        setRestored(null);
         if (error?.code === 'aborted' || error?.code === 'cancelled') return; // el usuario canceló: sin aviso
-        notify(word.kind === 'pdf' ? (error?.message || 'No se pudo procesar el PDF.') : 'No se pudo procesar el Word.', true);
+        notify(error?.message || 'No se pudo procesar el PDF.', true);
       })
-      .finally(() => { if (word.kind === 'pdf' && !cancelled) closePrompt(); }); // si ya no es la lectura vigente, otra pregunta puede estar abierta
+      .finally(() => { if (!cancelled) closePrompt(); }); // si ya no es la lectura vigente, otra pregunta puede estar abierta
     return () => { cancelled = true; controller.abort(); };
-  }, [word, dictionary, notify, askPassword, closePrompt]);
+  }, [word, hasDictionary, notify, askPassword, closePrompt]);
+
+  useEffect(() => {
+    if (!word || word.kind !== 'docx' || !dictionary) return undefined;
+    let cancelled = false;
+    restoreDocx(word.buffer, dictionary)
+      .then((result) => { if (!cancelled) setDocxRestored({ word, dictionary, result }); })
+      .catch(() => { if (!cancelled) notify('No se pudo procesar el Word.', true); });
+    return () => { cancelled = true; };
+  }, [word, dictionary, notify]);
+
+  const wordResult = useMemo(() => {
+    if (!word || !dictionary) return null;
+    if (word.kind === 'pdf') return pdfText?.word === word ? restorePdfText(pdfText.text, dictionary) : null;
+    return docxRestored?.word === word && docxRestored.dictionary === dictionary ? docxRestored.result : null;
+  }, [word, dictionary, pdfText, docxRestored]);
 
   const loadDictionary = useCallback((dict, name) => { setDictionary(dict); setDictionaryName(name); }, []);
 
@@ -109,7 +121,24 @@ export function useRestorer({ save, notify }) {
     // FIX-10: el archivo de la IA tiene nombre neutro; el nombre real sale del diccionario (si es uno nuestro).
     const stem = nameFromDictionary(dictionaryName) ?? word.name.replace(/\.(docx|pdf)$/i, '');
     const name = `${stem}-restaurado.${pdf ? 'pdf' : 'docx'}`;
-    if (await save(name, wordResult.blob)) notify(pdf ? 'PDF restaurado guardado.' : 'Word restaurado guardado.');
+    let blob = wordResult.blob;
+    let omitted = false;
+    if (pdf) {
+      // FIX-5: el PDF se escribe solo al descargarlo, no con cada cambio de diccionario.
+      try {
+        const { writeTextPdf } = await import('../model/pdf/writer.js'); // ADR-001: pdf-lib solo se carga al escribir
+        const { bytes, dropped } = await writeTextPdf({ lines: wordResult.text.split('\n') });
+        omitted = dropped.length > 0;
+        blob = new Blob([bytes], { type: 'application/pdf' });
+      } catch (error) {
+        notify(`No se pudo escribir el PDF: ${error.message}`, true);
+        return;
+      }
+    }
+    if (!(await save(name, blob))) return;
+    // Un solo aviso a la vez: el de caracteres omitidos pesa más que «guardado».
+    if (omitted) notify(OMITTED_CHARS, true);
+    else notify(pdf ? 'PDF restaurado guardado.' : 'Word restaurado guardado.');
   }, [wordResult, word, dictionaryName, save, notify]);
 
   return {

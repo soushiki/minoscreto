@@ -26,6 +26,12 @@ vi.mock('pdfjs-dist', async () => {
   };
 });
 vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?worker&inline', () => ({ default: class {} }));
+// FIX-5: cuenta cuántas veces se escribe un PDF (el real, envuelto).
+const writes = vi.hoisted(() => ({ count: 0 }));
+vi.mock('../src/model/pdf/writer.js', async (importOriginal) => {
+  const real = await importOriginal();
+  return { ...real, writeTextPdf: (...args) => { writes.count += 1; return real.writeTextPdf(...args); } };
+});
 
 const DICT = {
   '[PERSONA_1]': 'Ana Gómez', '[PERSONA_2]': 'Luis Pérez', '[EMPRESA_1]': 'Acme SAS',
@@ -50,14 +56,15 @@ async function textOf(blob) {
 }
 
 // Diccionario sin «_diccionario» en el nombre: el restaurado conserva el nombre del archivo subido (FIX-10).
+async function loadDictionary(dict, dictName = 'llave.json') {
+  const input = document.querySelector('input[type="file"][accept*=".zip"]');
+  fireEvent.change(input, { target: { files: [new File([JSON.stringify(dict)], dictName)] } });
+  await waitFor(() => expect(document.body.textContent).toContain(`${Object.keys(dict).length} etiquetas`));
+}
 async function openRestore(user, dict = DICT, dictName = 'llave.json') {
   render(<App />);
   await user.click(screen.getByRole('button', { name: /Recuperar los nombres reales/ }));
-  if (dict) {
-    const input = document.querySelector('input[type="file"][accept*=".zip"]');
-    fireEvent.change(input, { target: { files: [new File([JSON.stringify(dict)], dictName)] } });
-    await waitFor(() => expect(document.body.textContent).toContain(`${Object.keys(dict).length} etiquetas`));
-  }
+  if (dict) await loadDictionary(dict, dictName);
   await user.click(screen.getByRole('button', { name: 'Archivo' }));
 }
 const fileInput = () => document.querySelector('input[type="file"][accept*=".pdf"]');
@@ -173,6 +180,50 @@ describe('Restaurar: pestaña Archivo con .pdf (T10: R3, R5)', () => {
     await user.click(await downloadButton());
     await waitFor(() => expect(saved).toHaveLength(1));
     expect(saved[0].name).toBe('Tutela Juan Pérez-restaurado.pdf');
+  }, 20000);
+
+  it('FIX-4: cambiar de diccionario no vuelve a pedir la contraseña y usa los valores nuevos', async () => {
+    const user = userEvent.setup();
+    await openRestore(user);
+    upload(fixture('contrasena_usuario_sintetico'));
+    await waitFor(() => expect(openDialog()).toBeTruthy());
+    await user.type(openDialog().querySelector('input'), `${RIGHT}{Enter}`);
+    await downloadButton();
+    expect(document.body.textContent).not.toContain('[PERSONA_77]');
+    await loadDictionary({ '[PERSONA_77]': 'Nadie' }, 'otro_diccionario-7F3K.json');
+    // El resultado ya es el del diccionario nuevo (la etiqueta nueva no aparece en el documento) y sin volver a preguntar.
+    await waitFor(() => expect(document.body.textContent).toMatch(/No aparecen en el documento: \[PERSONA_77\]/));
+    await new Promise((r) => setTimeout(r, 500));
+    expect(openDialog()).toBeNull();
+    await user.click(await downloadButton());
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0].name).toBe('otro-restaurado.pdf');
+  }, 20000);
+
+  it('FIX-5: el PDF restaurado se escribe al descargarlo, no al restaurar ni al cambiar de diccionario', async () => {
+    const user = userEvent.setup();
+    await openRestore(user);
+    writes.count = 0;
+    upload(fixture('etiquetas_fin_de_linea_sintetico'));
+    await downloadButton();
+    await loadDictionary({ ...DICT, '[EMPRESA_1]': 'Beta Ltda', '[PERSONA_9]': 'Nadie' });
+    await downloadButton();
+    expect(writes.count).toBe(0);
+    await user.click(await downloadButton());
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(writes.count).toBe(1);
+    const text = await textOf(saved[0].blob); // escrito con el diccionario vigente
+    expect(text).toContain('Beta Ltda');
+    expect(text).not.toContain('Acme SAS');
+  }, 20000);
+
+  it('los caracteres que el PDF no puede escribir se avisan al descargar', async () => {
+    const user = userEvent.setup();
+    await openRestore(user, { ...DICT, '[EMPRESA_1]': 'Acme 😀 SAS' });
+    upload(fixture('etiquetas_fin_de_linea_sintetico'));
+    await user.click(await downloadButton());
+    await waitFor(() => expect(saved).toHaveLength(1));
+    await waitFor(() => expect(document.body.textContent).toMatch(/se omitieron/));
   }, 20000);
 
   it('un archivo que no es .docx ni .pdf se rechaza', async () => {
