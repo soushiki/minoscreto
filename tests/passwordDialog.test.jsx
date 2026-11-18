@@ -313,6 +313,57 @@ describe('PasswordDialog + usePasswordPrompt (T7: R1, A1, S1, S3)', () => {
     expect(screen.getByRole('status').textContent).toBe('Comprobando la contraseña…');
   });
 
+  // Mostrar/ocultar (pedido del usuario 2026-11-18: con la contraseña siempre oculta cuesta a quien no es de tecnología).
+  const toggle = () => screen.getByRole('button', { name: /^(Mostrar|Ocultar)$/ });
+
+  it('«Mostrar» deja ver lo escrito y «Ocultar» lo vuelve a tapar, sin perder el texto; se anuncia', async () => {
+    const { user, ask } = setup();
+    const answer = ask();
+    expect(toggle().textContent).toBe('Mostrar');
+    expect(toggle().getAttribute('aria-controls')).toBe(input().id);
+    await user.type(input(), 'clave');
+    await user.click(toggle());
+    expect(input().type).toBe('text');
+    expect(input().value).toBe('clave');
+    expect(toggle().textContent).toBe('Ocultar');
+    expect(screen.getByRole('status').textContent).toBe('La contraseña se ve en pantalla');
+    await user.click(toggle());
+    expect(input().type).toBe('password');
+    expect(toggle().textContent).toBe('Mostrar');
+    expect(screen.getByRole('status').textContent).toBe('La contraseña está oculta');
+    await user.click(toggle());
+    await user.type(input(), '{Enter}');
+    await expect(answer).resolves.toBe('clave');
+  });
+
+  it('visible, la entrada sigue sin autocompletar, corrector ni mayúsculas, y el botón no entra en su nombre', async () => {
+    const { user, ask } = setup();
+    ask();
+    await user.click(toggle());
+    expect(input().getAttribute('autocomplete')).toBe('off');
+    expect(input().getAttribute('spellcheck')).toBe('false');
+    expect(input().getAttribute('autocapitalize')).toBe('off');
+    expect(input().getAttribute('autocorrect')).toBe('off');
+    expect(input().getAttribute('name')).toBeNull();
+    expect(screen.getByLabelText('Contraseña')).toBe(input());
+  });
+
+  it('tras un intento fallido sigue como el usuario la dejó; al cerrar y reabrir vuelve a estar oculta', async () => {
+    const { user, ask } = setup();
+    const first = ask();
+    await user.click(toggle());
+    await user.type(input(), 'mala{Enter}');
+    await expect(first).resolves.toBe('mala');
+    const second = ask({ reason: 'incorrect' });
+    expect(input().type).toBe('text');
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+    await expect(second).resolves.toBeNull();
+    ask();
+    expect(input().type).toBe('password');
+    expect(toggle().textContent).toBe('Mostrar');
+    expect(screen.getByRole('status').textContent).toBe('');
+  });
+
   it('con pdf.js real: Cancelar desde el diálogo da PdfError «cancelled»', async () => {
     const { readPdfPages } = await import('../src/model/expediente/pdfjs.js');
     const { ref, user } = setup();

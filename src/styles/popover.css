@@ -12,9 +12,12 @@
 .pw-form { display: flex; flex-direction: column; gap: 10px; padding: 18px; }
 .pw-h { margin: 0; font-size: 17px; font-weight: 600; }
 .pw-file { margin: -4px 0 0; font-size: 13px; color: var(--ink2); overflow-wrap: anywhere; }
-.pw-label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 500; color: var(--ink2); }
-.pw-label input { padding: 9px 10px; border-radius: 8px; border: 1px solid var(--ink2); background: var(--bg); color: var(--ink); font-size: 15px; }
-.pw-label input[aria-invalid="true"] { border-color: var(--bad); }
+.pw-label { margin-bottom: -6px; font-size: 13px; font-weight: 500; color: var(--ink2); }
+.pw-field { display: flex; gap: 6px; }
+.pw-field input { flex: 1; min-width: 0; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--ink2); background: var(--bg); color: var(--ink); font-size: 15px; }
+.pw-field input[aria-invalid="true"] { border-color: var(--bad); }
+.pw-toggle { flex: none; min-width: 76px; border-color: var(--ink2); color: var(--ink); }
+.pw-toggle:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .pw-error { margin: -2px 0 0; font-size: 13px; font-weight: 600; color: var(--bad); }
 .pw-note { margin: 0; font-size: 12.5px; color: var(--ink2); }
 .pw-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
@@ -22,10 +25,10 @@
 @media (max-width: 600px) {
   .pw-form { padding: 16px; }
   .pw-actions .btn { flex: 1; }
-  .pw-label input { font-size: 16px; }
+  .pw-field input { font-size: 16px; }
 }
 @media (max-width: 600px), (pointer: coarse) {
-  .pw-actions .btn, .pw-label input { min-height: 44px; }
+  .pw-actions .btn, .pw-field input, .pw-toggle { min-height: 44px; }
 }
 @media (max-height: 500px) {
   .pw-dialog { max-height: calc(100dvh - 16px); }

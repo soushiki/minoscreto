@@ -7,6 +7,9 @@ export default function PasswordDialog({ prompt, onSubmit, onCancel }) {
   const inputRef = useRef(null);
   const cancelRef = useRef(null);
   const [empty, setEmpty] = useState(true);
+  // «Mostrar» solo cambia cómo se ve la entrada; el valor sigue sin pasar por el estado. Cada apertura empieza oculta.
+  const [shown, setShown] = useState(false);
+  const [toggled, setToggled] = useState(false);
   const open = Boolean(prompt);
   const checking = Boolean(prompt?.checking);
   const id = useId();
@@ -27,6 +30,8 @@ export default function PasswordDialog({ prompt, onSubmit, onCancel }) {
       if (dialog.open && typeof dialog.close === 'function') dialog.close();
       dialog.removeAttribute('open');
       clearInput();
+      setShown(false);
+      setToggled(false);
     }
   }, [open]);
 
@@ -72,7 +77,14 @@ export default function PasswordDialog({ prompt, onSubmit, onCancel }) {
     if (event.key === 'Escape') handleCancel(event);
   };
 
+  const toggleShown = () => {
+    setShown((s) => !s);
+    setToggled(true);
+  };
+
   const incorrect = prompt?.reason === 'incorrect' && !checking;
+  const status = checking ? 'Comprobando la contraseña…'
+    : toggled ? (shown ? 'La contraseña se ve en pantalla' : 'La contraseña está oculta') : '';
 
   return (
     <dialog ref={dialogRef} className="pw-dialog" aria-label="Contraseña del PDF" aria-describedby={`${fileId} ${noteId}`}
@@ -81,16 +93,20 @@ export default function PasswordDialog({ prompt, onSubmit, onCancel }) {
         <div className="pw-form">
           <h2 className="pw-h">Este PDF tiene contraseña</h2>
           <p className="pw-file" id={fileId}>{prompt.fileName.trim() || 'Archivo PDF'}</p>
-          <label className="pw-label" htmlFor={inputId}>
-            Contraseña
-            <input ref={inputRef} id={inputId} type="password" autoComplete="off" spellCheck={false} autoCapitalize="off"
+          <label className="pw-label" htmlFor={inputId}>Contraseña</label>
+          <div className="pw-field">
+            <input ref={inputRef} id={inputId} type={shown ? 'text' : 'password'} autoComplete="off" spellCheck={false}
+              autoCapitalize="off" autoCorrect="off"
               data-1p-ignore="" data-lpignore="true" data-bwignore="" onKeyDown={handleInputKeyDown}
               aria-invalid={incorrect || undefined} aria-describedby={incorrect ? errorId : undefined}
               disabled={checking} onInput={(e) => setEmpty(e.currentTarget.value === '')} />
-          </label>
+            <button type="button" className="btn pw-toggle" aria-controls={inputId} onClick={toggleShown}>
+              {shown ? 'Ocultar' : 'Mostrar'}
+            </button>
+          </div>
           {incorrect && <p className="pw-error" id={errorId} role="alert">Contraseña incorrecta</p>}
           <p className="pw-note" id={noteId}>Solo se usa para abrir el archivo en este computador. No se guarda ni se envía.</p>
-          <p className="pw-sr" role="status">{checking ? 'Comprobando la contraseña…' : ''}</p>
+          <p className="pw-sr" role="status">{status}</p>
           <div className="pw-actions">
             <button ref={cancelRef} type="button" className="btn ghost" onClick={handleCancel}>Cancelar</button>
             <button type="button" className="btn primary" onClick={submitNow} disabled={empty || checking}>
