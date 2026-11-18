@@ -36,6 +36,24 @@ const norm = (s) => s.replace(/\s+/g, ' ').trim();
 const expectedFrom = (text) => norm(toWinAnsi(text.split('\n').map((l) => l.replace(/^#+\s+/, '')).join('\n')).text);
 const stripFooters = (pages) => norm(pages.map((p) => p.replace(/Página \d+ de \d+\s*$/, '')).join(' '));
 
+// S1/S2: la contraseña no queda en almacenamiento, consola, URL, página ni archivos descargados.
+const CONSOLE = ['log', 'info', 'debug', 'warn', 'error'];
+let consoleCalls;
+async function expectPasswordNowhere(where) {
+  if (!PASSWORD) return;
+  const stored = [window.localStorage, window.sessionStorage]
+    .flatMap((s) => Object.keys(s).flatMap((k) => [k, s.getItem(k)]));
+  const files = await Promise.all(saved.map(async (s) => `${s.name}\n${await s.blob.text()}`));
+  const places = {
+    storage: stored.join('\n'),
+    console: consoleCalls.map((args) => args.map(String).join(' ')).join('\n'),
+    url: window.location.href,
+    page: document.documentElement.outerHTML + [...document.querySelectorAll('input')].map((i) => i.value).join('\n'),
+    files: files.join('\n'),
+  };
+  for (const [place, text] of Object.entries(places)) expect(text, `${where}: contraseña en ${place}`).not.toContain(PASSWORD);
+}
+
 beforeAll(() => {
   window.scrollTo = () => {};
   window.ResizeObserver = window.ResizeObserver || class { observe() {} disconnect() {} unobserve() {} };
@@ -46,6 +64,11 @@ beforeEach(() => {
   URL.createObjectURL = vi.fn((blob) => { saved.push({ blob }); return 'blob:prueba'; });
   URL.revokeObjectURL = vi.fn();
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function click() { saved[saved.length - 1].name = this.download; });
+  consoleCalls = [];
+  for (const m of CONSOLE) {
+    const original = console[m].bind(console);
+    vi.spyOn(console, m).mockImplementation((...args) => { consoleCalls.push(args); original(...args); });
+  }
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
@@ -91,6 +114,7 @@ describe('ida y vuelta PDF (T11)', () => {
     expect(values.length).toBeGreaterThan(0);
     for (const [, value] of values) expect(protText).not.toContain(String(value));
     expect(protText).toBe(expectedFrom(md));
+    await expectPasswordNowhere('tras anonimizar');
 
     // 2. Restaurar ese .pdf con el diccionario, en una app nueva.
     cleanup();
@@ -128,6 +152,7 @@ describe('ida y vuelta PDF (T11)', () => {
       if (times) expect(found, `${tag} → ${forms.join(' / ')}`).toBeGreaterThanOrEqual(times);
     }
     expect(original.length).toBeGreaterThan(0);
+    await expectPasswordNowhere('tras restaurar');
 
     if (OUT) {
       mkdirSync(OUT, { recursive: true });
