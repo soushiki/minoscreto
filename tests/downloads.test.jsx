@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import App from '../src/App.jsx';
 import { goToTools } from './helpers.js';
 import {
-  buildDocx, buildEntities, buildDictionary, dictionaryFileName, protectedFileName, readDictionaryFrom
+  buildDocx, buildEntities, buildDictionary, bundleFileName, dictionaryFileName, exportCode, nameFromDictionary, protectedFileName, readDictionaryFrom
 } from '../src/model/index.js';
 import { buildPartsZip, renderParts, splitParts, anonymizeTexts } from '../src/model/expediente/index.js';
 import { DICTIONARY_DELAY } from '../src/viewmodels/useProtectedDownload.js';
@@ -62,21 +62,41 @@ async function partsZip() {
   const applied = anonymizeTexts(texts, entities);
   const blocks = applied.texts.map((text, index) => ({ index, page: index + 1, text }));
   const rendered = renderParts({ blocks, parts: splitParts(blocks, { mode: 'pages', pagesPerPart: 1 }), emptyPages: [] });
-  return buildPartsZip({ name: 'caso', parts: rendered, dictionary: buildDictionary(entities, new Set(applied.usedIds)), type: 'uint8array' });
+  return buildPartsZip({ name: 'caso', code: '7F3K', parts: rendered, dictionary: buildDictionary(entities, new Set(applied.usedIds)), type: 'uint8array' });
 }
 
-async function wordWithTwoPages() {
+async function wordWithTwoPages(name = 'caso.docx') {
   const zip = new JSZip();
   const w = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
   const p = (t, pre = '') => `<w:p><w:r>${pre}<w:t>${t}</w:t></w:r></w:p>`;
   zip.file('word/document.xml', `<w:document ${w}><w:body>${p('La señora Laura Patricia Ortega Jiménez demandó.')}${p('Laura Patricia Ortega Jiménez firmó.', '<w:lastRenderedPageBreak/>')}</w:body></w:document>`);
-  return new File([await zip.generateAsync({ type: 'uint8array' })], 'caso.docx');
+  return new File([await zip.generateAsync({ type: 'uint8array' })], name);
 }
 
+// FIX-10: código de 4 caracteres sin 0/O ni 1/I/L que empareja el archivo para la IA con su diccionario.
+const CODE = '[2-9A-HJKMNP-Z]{4}';
+const codeIn = (name) => new RegExp(CODE).exec(name.replace(/^documento-/, '').replace(/^.*_diccionario-/, ''))?.[0];
+
 describe('archivos protegidos', () => {
-  it('nombra el documento y el diccionario para que queden juntos', () => {
-    expect(protectedFileName('Contrato: arriendo', 'docx')).toBe('Contrato- arriendo_protegido.docx');
-    expect(dictionaryFileName('Contrato: arriendo')).toBe('Contrato- arriendo_diccionario.json');
+  it('lo que va a la IA tiene nombre neutro; lo que se guarda en casa, el nombre real y el mismo código', () => {
+    expect(protectedFileName('7F3K', 'docx')).toBe('documento-7F3K_protegido.docx');
+    expect(dictionaryFileName('Contrato: arriendo', '7F3K')).toBe('Contrato- arriendo_diccionario-7F3K.json');
+    expect(bundleFileName('Tutela Juan Pérez', '7F3K')).toBe('Tutela Juan Pérez-7F3K.zip');
+  });
+
+  it('exportCode da 4 caracteres legibles y cambia de una exportación a otra', () => {
+    const codes = new Set(Array.from({ length: 50 }, exportCode));
+    for (const c of codes) expect(c).toMatch(new RegExp(`^${CODE}$`));
+    expect(codes.size).toBeGreaterThan(40);
+  });
+
+  it('nameFromDictionary saca el nombre real de nuestro diccionario; de otro nombre, null', () => {
+    expect(nameFromDictionary('Tutela Juan Pérez_diccionario-7F3K.json')).toBe('Tutela Juan Pérez');
+    expect(nameFromDictionary('Tutela Juan Pérez_diccionario-7F3K (1).json')).toBe('Tutela Juan Pérez');
+    expect(nameFromDictionary('caso_diccionario.txt')).toBe('caso');
+    expect(nameFromDictionary('Tutela Juan Pérez-7F3K.zip')).toBeNull();
+    expect(nameFromDictionary('llave.json')).toBeNull();
+    expect(nameFromDictionary('')).toBeNull();
   });
 
   it('lee el diccionario desde el .json, el .txt o el .zip de un expediente en partes', async () => {
@@ -111,15 +131,17 @@ describe('descarga y copia en la app', () => {
     expect(screen.queryByRole('button', { name: /^Diccionario/ })).toBeNull();
 
     await user.click(screen.getByRole('button', { name: 'Descargar' }));
-    await waitFor(() => expect(downloads[0]).toMatch(/_protegido\.docx$/), { timeout: 4000 });
-    const base = downloads[0].replace(/_protegido\.docx$/, '');
+    await waitFor(() => expect(downloads[0]).toMatch(new RegExp(`^documento-${CODE}_protegido\\.docx$`)), { timeout: 4000 });
+    const code = codeIn(downloads[0]);
     await waitFor(() => expect(document.querySelector('.dl-receipt')?.textContent).toContain('Guarde el diccionario'));
-    await waitFor(() => expect(downloads).toEqual([`${base}_protegido.docx`, `${base}_diccionario.json`]), { timeout: DICTIONARY_DELAY + 2000 });
+    await waitFor(() => expect(downloads).toHaveLength(2), { timeout: DICTIONARY_DELAY + 2000 });
+    expect(downloads[1]).toMatch(new RegExp(`^.+_diccionario-${code}\\.json$`));
+    expect(downloads[1].startsWith('documento-')).toBe(false); // el diccionario conserva el nombre real
     await waitFor(() => expect(document.querySelectorAll('.dl-mark.ok')).toHaveLength(2));
 
     await user.click(screen.getByRole('button', { name: 'Descargar diccionario de nuevo' }));
     await waitFor(() => expect(downloads).toHaveLength(3));
-    expect(downloads[2]).toBe(`${base}_diccionario.json`);
+    expect(downloads[2]).toBe(downloads[1]);
 
     await user.click(screen.getByRole('button', { name: 'Copiar texto para la IA' }));
     await waitFor(() => expect(writeText).toHaveBeenCalled());
@@ -144,7 +166,7 @@ describe('descarga y copia en la app', () => {
       expect(screen.queryByRole('button', { name: 'Descargar diccionario de nuevo' })).toBeNull();
 
       await user.click(screen.getByRole('button', { name: 'Descargar diccionario' }));
-      await waitFor(() => expect(downloads[1]).toMatch(/_diccionario\.json$/));
+      await waitFor(() => expect(downloads[1]).toMatch(new RegExp(`_diccionario-${codeIn(downloads[0])}\\.json$`)));
       await waitFor(() => expect(document.querySelectorAll('.dl-mark.ok')).toHaveLength(2));
       expect(screen.getByRole('button', { name: 'Descargar diccionario de nuevo' })).toBeTruthy();
     } finally {
@@ -160,7 +182,30 @@ describe('descarga y copia en la app', () => {
     fireEvent.change(document.querySelector('input[type="file"][accept^=".pdf"]'), { target: { files: [await wordWithTwoPages()] } });
     await waitFor(() => expect(document.querySelector('.xp-pre')).toBeTruthy(), { timeout: 8000 });
     await user.click(screen.getByRole('button', { name: 'Descargar' }));
-    await waitFor(() => expect(downloads).toEqual(['caso_protegido.md', 'caso_diccionario.json']), { timeout: DICTIONARY_DELAY + 3000 });
+    await waitFor(() => expect(downloads).toHaveLength(2), { timeout: DICTIONARY_DELAY + 3000 });
+    const code = codeIn(downloads[0]);
+    expect(downloads).toEqual([`documento-${code}_protegido.md`, `caso_diccionario-${code}.json`]);
+  }, 20000);
+
+  it('FIX-3/FIX-10: un expediente con nombre de persona no deja ese nombre en el archivo ni en el texto para la IA', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await goToTools(user);
+    await user.click(screen.getByRole('button', { name: 'Expediente' }));
+    fireEvent.change(document.querySelector('input[type="file"][accept^=".pdf"]'), { target: { files: [await wordWithTwoPages('Tutela Juan Pérez.docx')] } });
+    await waitFor(() => expect(document.querySelector('.xp-pre')).toBeTruthy(), { timeout: 8000 });
+    const blobs = [];
+    URL.createObjectURL = vi.fn((b) => { blobs.push(b); return 'blob:prueba'; });
+    await user.click(screen.getByRole('button', { name: 'Descargar' }));
+    await waitFor(() => expect(downloads).toHaveLength(2), { timeout: DICTIONARY_DELAY + 3000 });
+    const code = codeIn(downloads[0]);
+    expect(downloads).toEqual([`documento-${code}_protegido.md`, `Tutela Juan Pérez_diccionario-${code}.json`]);
+    const md = await blobs[0].text();
+    expect(md.startsWith('# Documento (anonimizado)')).toBe(true);
+    for (const word of ['Tutela', 'Juan', 'Pérez']) {
+      expect(downloads[0]).not.toContain(word);
+      expect(md).not.toContain(word);
+    }
   }, 20000);
 
   describe('PDF con contraseña', () => {
@@ -184,7 +229,9 @@ describe('descarga y copia en la app', () => {
       await waitFor(() => expect(document.querySelector('.xp-pre')).toBeTruthy(), { timeout: 8000 });
       expect(document.querySelector('dialog').hasAttribute('open')).toBe(false);
       await user.click(screen.getByRole('button', { name: 'Descargar' }));
-      await waitFor(() => expect(downloads).toEqual(['caso_protegido.pdf', 'caso_diccionario.json']), { timeout: DICTIONARY_DELAY + 3000 });
+      await waitFor(() => expect(downloads).toHaveLength(2), { timeout: DICTIONARY_DELAY + 3000 });
+      const code = codeIn(downloads[0]);
+      expect(downloads).toEqual([`documento-${code}_protegido.pdf`, `caso_diccionario-${code}.json`]);
       expect(document.querySelector('.toast')?.textContent ?? '').not.toMatch(/omitieron/);
       const bytes = new Uint8Array(await blobs[0].arrayBuffer());
       const { readPdfPages } = await import('../src/model/expediente/pdfjs.js');
@@ -239,7 +286,8 @@ describe('descarga y copia en la app', () => {
     expect(writeText.mock.calls[0][0]).toContain('[PERSONA_1] firmó');
 
     await user.click(screen.getByRole('button', { name: /Descargar \(2 partes y diccionario\)/ }));
-    await waitFor(() => expect(downloads).toEqual(['caso_protegido.zip']));
+    await waitFor(() => expect(downloads).toHaveLength(1));
+    expect(downloads[0]).toMatch(new RegExp(`^caso-${CODE}\\.zip$`));
     expect(document.querySelector('.dl-receipt').textContent).toContain('carpeta NO-SUBIR');
   }, 20000);
 
@@ -248,7 +296,7 @@ describe('descarga y copia en la app', () => {
     render(<App />);
     await user.click(screen.getByRole('button', { name: /Recuperar los nombres reales/ }));
     const input = document.querySelector('input[type="file"][accept*=".zip"]');
-    fireEvent.change(input, { target: { files: [new File([await partsZip()], 'caso_protegido.zip')] } });
+    fireEvent.change(input, { target: { files: [new File([await partsZip()], 'caso-7F3K.zip')] } });
     await waitFor(() => expect(document.body.textContent).toContain('1 etiquetas'));
     fireEvent.change(screen.getByPlaceholderText(/Pega aquí la respuesta/), { target: { value: 'Según [PERSONA_1], todo bien.' } });
     await waitFor(() => expect(document.querySelector('.restored').textContent).toContain('Según Carlos Andrés Mendoza Ríos, todo bien.'));

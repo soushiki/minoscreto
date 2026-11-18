@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import {
-  analyze, anonymizedText, buildDictionary, collectSources, buildDocx, dictionaryFileName, dictionaryJson, DocxError, exportAnonymized, findHits, protectedFileName,
+  analyze, anonymizedText, buildDictionary, collectSources, buildDocx, dictionaryFileName, dictionaryJson, DocxError, exportAnonymized, exportCode, findHits, protectedFileName,
   buildEntities, findSuggestions, openDocx, partLabel, renameLabel, SAMPLE_NAME, SAMPLE_PARAGRAPHS, countMatches
 } from '../model/index.js';
 import { anonymizerReducer, initialState } from './anonymizerState.js';
@@ -92,9 +92,10 @@ export function useAnonymizer({ save, notify }) {
     if (!Object.keys(dictionary).length) { notify('Todavía no hay nada anonimizado.', true); return; }
     try {
       const { blob } = await exportAnonymized(state.buffer, entities, excluded);
+      const code = exportCode(); // empareja el Word de nombre neutro (para la IA) con el diccionario de nombre real
       await downloadPair(
-        { name: protectedFileName(state.name, 'docx'), blob },
-        { name: dictionaryFileName(state.name), text: dictionaryJson(dictionary) }
+        { name: protectedFileName(code, 'docx'), blob },
+        { name: dictionaryFileName(state.name, code), text: dictionaryJson(dictionary) }
       );
     } catch (error) {
       notify(`No se pudo generar el Word: ${error.message}`, true);

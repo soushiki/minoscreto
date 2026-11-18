@@ -6,7 +6,7 @@ export default function DictionaryCard({ vm, current }) {
   return (
     <section className="card">
       <h2>1. Diccionario</h2>
-      <p className="sub">El archivo «…_diccionario.json» que se descargó junto con el documento protegido. Si exportó un expediente en partes, puede cargar directamente el archivo comprimido (.zip).</p>
+      <p className="sub">El archivo «…_diccionario-XXXX.json» que se descargó junto con el documento protegido (el mismo código XXXX). Si exportó un expediente en partes, puede cargar directamente el archivo comprimido (.zip).</p>
       <DropZone text="Arrastre el diccionario aquí o" buttonLabel="Elegir diccionario (.json o .zip)"
         accept=".json,.txt,.zip,application/json,text/plain,application/zip" onFile={vm.readDictionaryFile} />
       {currentCount > 0 && (

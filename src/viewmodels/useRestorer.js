@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { buildDocx, DOCX_MIME, readDictionaryFrom, restoreDocx, restoreText } from '../model/index.js';
+import { buildDocx, DOCX_MIME, nameFromDictionary, readDictionaryFrom, restoreDocx, restoreText } from '../model/index.js';
 import { readPdfPages } from '../model/expediente/pdfjs.js';
 import { rejoinTags } from '../model/pdf/rejoin.js';
 import { stripAiHeader, stripPageMarkers } from '../model/expediente/render.js';
@@ -106,9 +106,11 @@ export function useRestorer({ save, notify }) {
   const downloadRestoredWord = useCallback(async () => {
     if (!wordResult) return;
     const pdf = word.kind === 'pdf';
-    const name = `${word.name.replace(/\.(docx|pdf)$/i, '')}-restaurado.${pdf ? 'pdf' : 'docx'}`;
+    // FIX-10: el archivo de la IA tiene nombre neutro; el nombre real sale del diccionario (si es uno nuestro).
+    const stem = nameFromDictionary(dictionaryName) ?? word.name.replace(/\.(docx|pdf)$/i, '');
+    const name = `${stem}-restaurado.${pdf ? 'pdf' : 'docx'}`;
     if (await save(name, wordResult.blob)) notify(pdf ? 'PDF restaurado guardado.' : 'Word restaurado guardado.');
-  }, [wordResult, word, save, notify]);
+  }, [wordResult, word, dictionaryName, save, notify]);
 
   return {
     dictionary, dictionaryName, mode, pasted, word, wordResult, pastedResult,

@@ -22,7 +22,7 @@ const OUT = process.env.ROUNDTRIP_OUT || '';
 const STEM = basename(SOURCE).replace(/\.pdf$/i, '');
 
 let saved;
-const blobNamed = (suffix) => saved.find((s) => s.name?.endsWith(suffix));
+const blobNamed = (pattern) => saved.find((s) => s.name && pattern.test(s.name));
 const bytesOf = async (blob) => new Uint8Array(await blob.arrayBuffer());
 
 async function pdfText(bytes, password) {
@@ -93,10 +93,14 @@ describe('ida y vuelta PDF (T11)', () => {
     await user.click(screen.getByRole('button', { name: 'Copiar texto para la IA' }));
     await waitFor(() => expect(copied).not.toBe(''));
     await user.click(screen.getByRole('button', { name: 'Descargar' }));
-    await waitFor(() => expect(blobNamed('_diccionario.json')).toBeTruthy(), { timeout: DICTIONARY_DELAY + 5000 });
-    const protectedPdf = blobNamed('_protegido.pdf');
-    expect(protectedPdf).toBeTruthy();
-    const dictText = await blobNamed('_diccionario.json').blob.text();
+    await waitFor(() => expect(blobNamed(/_diccionario-[A-Z0-9]{4}\.json$/)).toBeTruthy(), { timeout: DICTIONARY_DELAY + 5000 });
+    const dictFile = blobNamed(/_diccionario-[A-Z0-9]{4}\.json$/);
+    const code = dictFile.name.slice(-9, -5);
+    // FIX-10: el PDF para la IA tiene nombre neutro con el mismo código; el diccionario conserva el nombre real.
+    expect(dictFile.name).toBe(`${STEM}_diccionario-${code}.json`);
+    const protectedPdf = blobNamed(/_protegido\.pdf$/);
+    expect(protectedPdf?.name).toBe(`documento-${code}_protegido.pdf`);
+    const dictText = await dictFile.blob.text();
     const dict = await readDictionaryFrom(new TextEncoder().encode(dictText));
     const variants = dictionaryVariants(dict);
     const md = copied;
@@ -124,15 +128,15 @@ describe('ida y vuelta PDF (T11)', () => {
     render(<App />);
     await user.click(screen.getByRole('button', { name: /Recuperar los nombres reales/ }));
     fireEvent.change(document.querySelector('input[type="file"][accept*=".zip"]'),
-      { target: { files: [new File([dictText], `${STEM}_diccionario.json`)] } });
+      { target: { files: [new File([dictText], dictFile.name)] } });
     await waitFor(() => expect(document.body.textContent).toMatch(/\d+ etiquetas/));
     await user.click(screen.getByRole('button', { name: 'Archivo' }));
     fireEvent.change(document.querySelector('input[type="file"][accept*=".pdf"]'),
-      { target: { files: [new File([protectedBytes], `${STEM}_protegido.pdf`, { type: 'application/pdf' })] } });
+      { target: { files: [new File([protectedBytes], protectedPdf.name, { type: 'application/pdf' })] } });
     await user.click(await screen.findByRole('button', { name: 'Descargar PDF restaurado' }, { timeout: 30000 }));
     await waitFor(() => expect(saved.length).toBe(firstRound + 1));
     const restored = saved[saved.length - 1];
-    expect(restored.name).toBe(`${STEM}_protegido-restaurado.pdf`);
+    expect(restored.name).toBe(`${STEM}-restaurado.pdf`); // nombre real, sacado del diccionario
     expect(document.body.textContent).not.toContain('Sin entrada en el diccionario');
 
     const restoredBytes = await bytesOf(restored.blob);
@@ -140,12 +144,13 @@ describe('ida y vuelta PDF (T11)', () => {
     expect(rest.encrypted).toBe(false);
     const restText = stripFooters(rest.pages);
     // Completo: igual al texto anonimizado con cada etiqueta cambiada por su valor real, y ninguna etiqueta queda.
-    // Sin el encabezado para la IA: el título vuelve a ser el nombre, sin «(anonimizado)» ni notas de etiquetas.
+    // Sin el encabezado para la IA: el título es «Documento» (FIX-3), sin «(anonimizado)» ni notas de etiquetas.
     expect(restText).toBe(expectedFrom(stripPageMarkers(stripAiHeader(restoreText(md, dict).text))));
     expect(restText).not.toMatch(/\[[A-Z_]+_\d+\]/);
     expect(restText).not.toMatch(/\[(?:Folio|Página)s? /);
     expect(restText).not.toMatch(/anonimizado|\[PERSONA_N\]|etiquetas entre corchetes|Expediente completo/);
-    expect(restText.startsWith(STEM)).toBe(true);
+    expect(restText.startsWith('Documento')).toBe(true);
+    expect(protText).not.toContain(STEM); // FIX-3: el nombre del archivo no llega a la IA
 
     // Y frente al PDF original: cada valor real vuelve tantas veces como su etiqueta aparecía.
     const original = stripFooters((await pdfText(new Uint8Array(readFileSync(SOURCE)), PASSWORD || undefined)).pages);
@@ -160,8 +165,8 @@ describe('ida y vuelta PDF (T11)', () => {
 
     if (OUT) {
       mkdirSync(OUT, { recursive: true });
-      writeFileSync(join(OUT, `${STEM}_protegido.pdf`), protectedBytes);
-      writeFileSync(join(OUT, `${STEM}_protegido-restaurado.pdf`), restoredBytes);
+      writeFileSync(join(OUT, protectedPdf.name), protectedBytes);
+      writeFileSync(join(OUT, restored.name), restoredBytes);
       writeFileSync(join(OUT, `${STEM}_comparacion.txt`),
         `ORIGINAL (texto del PDF de entrada)\n${original}\n\nANONIMIZADO (.pdf)\n${protText}\n\nRESTAURADO (.pdf)\n${restText}\n`);
     }

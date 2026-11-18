@@ -213,12 +213,12 @@ describe('división en partes', () => {
     expect(rendered[0].text).toContain('[Folio 1]');
     expect(rendered.every((p) => p.text.includes('[PERSONA_1]') && !p.text.includes('Mendoza'))).toBe(true);
     const dictionary = buildDictionary(entities, new Set(applied.usedIds));
-    const zip = await JSZip.loadAsync(await buildPartsZip({ name: 'caso', parts: rendered, dictionary, type: 'uint8array' }));
+    const zip = await JSZip.loadAsync(await buildPartsZip({ name: 'caso', code: '7F3K', parts: rendered, dictionary, type: 'uint8array' }));
     expect(Object.keys(zip.files).filter((f) => !f.endsWith('/')).sort()).toEqual([
-      'LEAME.txt', 'NO-SUBIR/caso_diccionario.json',
-      'para-subir-a-la-IA/caso_parte-1-de-3.md', 'para-subir-a-la-IA/caso_parte-2-de-3.md', 'para-subir-a-la-IA/caso_parte-3-de-3.md'
+      'LEAME.txt', 'NO-SUBIR/caso_diccionario-7F3K.json',
+      'para-subir-a-la-IA/documento-7F3K_parte-1-de-3.md', 'para-subir-a-la-IA/documento-7F3K_parte-2-de-3.md', 'para-subir-a-la-IA/documento-7F3K_parte-3-de-3.md'
     ]);
-    expect(JSON.parse(await zip.file('NO-SUBIR/caso_diccionario.json').async('string'))).toEqual({ '[PERSONA_1]': 'Carlos Andrés Mendoza Ríos' });
+    expect(JSON.parse(await zip.file('NO-SUBIR/caso_diccionario-7F3K.json').async('string'))).toEqual({ '[PERSONA_1]': 'Carlos Andrés Mendoza Ríos' });
     const readme = await zip.file('LEAME.txt').async('string');
     expect(readme).toContain('NUNCA lo suba a la IA');
     expect(readme).toContain('Recuperar los nombres reales');
@@ -233,16 +233,16 @@ describe('división en partes', () => {
     const list = (zip) => Object.keys(zip.files).filter((f) => !f.endsWith('/')).sort();
 
     it('con pdf:true trae .pdf y .md por parte, y cada PDF se lee con sus etiquetas enteras', async () => {
-      const zip = await JSZip.loadAsync(await buildPartsZip({ name: 'caso', parts, dictionary, type: 'uint8array', pdf: true }));
+      const zip = await JSZip.loadAsync(await buildPartsZip({ name: 'caso', code: '7F3K', parts, dictionary, type: 'uint8array', pdf: true }));
       expect(list(zip)).toEqual([
-        'LEAME.txt', 'NO-SUBIR/caso_diccionario.json',
-        'para-subir-a-la-IA/caso_parte-1-de-2.md', 'para-subir-a-la-IA/caso_parte-1-de-2.pdf',
-        'para-subir-a-la-IA/caso_parte-2-de-2.md', 'para-subir-a-la-IA/caso_parte-2-de-2.pdf'
+        'LEAME.txt', 'NO-SUBIR/caso_diccionario-7F3K.json',
+        'para-subir-a-la-IA/documento-7F3K_parte-1-de-2.md', 'para-subir-a-la-IA/documento-7F3K_parte-1-de-2.pdf',
+        'para-subir-a-la-IA/documento-7F3K_parte-2-de-2.md', 'para-subir-a-la-IA/documento-7F3K_parte-2-de-2.pdf'
       ]);
-      expect(await zip.file('para-subir-a-la-IA/caso_parte-1-de-2.md').async('string')).toBe(parts[0].text);
+      expect(await zip.file('para-subir-a-la-IA/documento-7F3K_parte-1-de-2.md').async('string')).toBe(parts[0].text);
       const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
       for (const [k, tag] of [[1, '[PERSONA_1]'], [2, '[EMPRESA_2]']]) {
-        const data = await zip.file(`para-subir-a-la-IA/caso_parte-${k}-de-2.pdf`).async('uint8array');
+        const data = await zip.file(`para-subir-a-la-IA/documento-7F3K_parte-${k}-de-2.pdf`).async('uint8array');
         const task = pdfjs.getDocument({ data, isEvalSupported: false, verbosity: 0 });
         const doc = await task.promise;
         const content = await (await doc.getPage(1)).getTextContent();
@@ -253,9 +253,9 @@ describe('división en partes', () => {
     });
 
     it('con pdf:false (o sin pasarlo) da la lista y el LEAME de siempre', async () => {
-      const a = await JSZip.loadAsync(await buildPartsZip({ name: 'caso', parts, dictionary, type: 'uint8array' }));
-      const b = await JSZip.loadAsync(await buildPartsZip({ name: 'caso', parts, dictionary, type: 'uint8array', pdf: false }));
-      expect(list(a)).toEqual(['LEAME.txt', 'NO-SUBIR/caso_diccionario.json', 'para-subir-a-la-IA/caso_parte-1-de-2.md', 'para-subir-a-la-IA/caso_parte-2-de-2.md']);
+      const a = await JSZip.loadAsync(await buildPartsZip({ name: 'caso', code: '7F3K', parts, dictionary, type: 'uint8array' }));
+      const b = await JSZip.loadAsync(await buildPartsZip({ name: 'caso', code: '7F3K', parts, dictionary, type: 'uint8array', pdf: false }));
+      expect(list(a)).toEqual(['LEAME.txt', 'NO-SUBIR/caso_diccionario-7F3K.json', 'para-subir-a-la-IA/documento-7F3K_parte-1-de-2.md', 'para-subir-a-la-IA/documento-7F3K_parte-2-de-2.md']);
       expect(list(b)).toEqual(list(a));
       expect(await b.file('LEAME.txt').async('string')).toBe(await a.file('LEAME.txt').async('string'));
       expect(await a.file('LEAME.txt').async('string')).not.toContain('dos formatos');
@@ -263,11 +263,11 @@ describe('división en partes', () => {
 
     it('onDropped recibe una sola vez la unión de caracteres omitidos, y no se llama si no hay', async () => {
       const onDropped = vi.fn();
-      await buildPartsZip({ name: 'caso', parts: [{ number: 1, text: 'a 😀 b' }, { number: 2, text: 'c 😀 ∑' }], dictionary, type: 'uint8array', pdf: true, onDropped });
+      await buildPartsZip({ name: 'caso', code: '7F3K', parts: [{ number: 1, text: 'a 😀 b' }, { number: 2, text: 'c 😀 ∑' }], dictionary, type: 'uint8array', pdf: true, onDropped });
       expect(onDropped).toHaveBeenCalledTimes(1);
       expect(onDropped.mock.calls[0][0].length).toBeGreaterThan(0);
       const none = vi.fn();
-      await buildPartsZip({ name: 'caso', parts, dictionary, type: 'uint8array', pdf: true, onDropped: none });
+      await buildPartsZip({ name: 'caso', code: '7F3K', parts, dictionary, type: 'uint8array', pdf: true, onDropped: none });
       expect(none).not.toHaveBeenCalled();
     });
   });
@@ -275,7 +275,7 @@ describe('división en partes', () => {
   it('marca folios sin texto y saltos de una selección', () => {
     const blocks = [{ index: 0, page: 1, text: 'A' }, { index: 1, page: 1, text: 'B' }, { index: 5, page: 4, text: 'C' }, { index: 6, page: 4, text: 'D' }];
     expect(renderBlocks(blocks, [2, 3])).toBe('[Folio 1]\n\nA\n\nB\n\n[…]\n\n[Folios sin texto legible: 2–3]\n\n[Folio 4]\n\nC\n\nD\n');
-    expect(renderWhole({ name: 'caso', blocks, emptyPages: [], selection: true })).toMatch(/^# caso \(anonimizado\)\n\nPasajes seleccionados del expediente · folios 1–4/);
+    expect(renderWhole({ name: 'caso', blocks, emptyPages: [], selection: true })).toMatch(/^# Documento \(anonimizado\)\n\nPasajes seleccionados del expediente · folios 1–4/);
   });
 });
 
@@ -342,7 +342,7 @@ describe('expediente desde Word', () => {
     expect(renderBlocks(blocks, [], 'parrafo')).toBe('A\n\nB\n');
     const parts = renderParts({ blocks, parts: [{ from: 0, to: 1, overlapFrom: 0 }, { from: 1, to: 2, overlapFrom: 1 }], emptyPages: [], unit: 'parrafo' });
     expect(parts[1].text).toMatch(/^Parte 2 de 2 · párrafo 2\n/);
-    expect(renderWhole({ name: 'x', blocks, emptyPages: [], unit: 'pagina' })).toContain('Expediente completo · páginas 1–2');
+    expect(renderWhole({ blocks, emptyPages: [], unit: 'pagina' })).toContain('Expediente completo · páginas 1–2');
   });
 });
 

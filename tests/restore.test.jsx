@@ -49,12 +49,13 @@ async function textOf(blob) {
   return out;
 }
 
-async function openRestore(user, dict = DICT) {
+// Diccionario sin «_diccionario» en el nombre: el restaurado conserva el nombre del archivo subido (FIX-10).
+async function openRestore(user, dict = DICT, dictName = 'llave.json') {
   render(<App />);
   await user.click(screen.getByRole('button', { name: /Recuperar los nombres reales/ }));
   if (dict) {
     const input = document.querySelector('input[type="file"][accept*=".zip"]');
-    fireEvent.change(input, { target: { files: [new File([JSON.stringify(dict)], 'caso_diccionario.json')] } });
+    fireEvent.change(input, { target: { files: [new File([JSON.stringify(dict)], dictName)] } });
     await waitFor(() => expect(document.body.textContent).toContain(`${Object.keys(dict).length} etiquetas`));
   }
   await user.click(screen.getByRole('button', { name: 'Archivo' }));
@@ -163,6 +164,15 @@ describe('Restaurar: pestaña Archivo con .pdf (T10: R3, R5)', () => {
     await waitFor(() => expect(saved).toHaveLength(1));
     expect(saved[0].name).toBe('contrasena_usuario_sintetico-restaurado.pdf');
     expect(saved[0].blob.type).toBe('application/pdf');
+  }, 20000);
+
+  it('FIX-10: con nuestro diccionario, el restaurado lleva el nombre real (el archivo de la IA tiene nombre neutro)', async () => {
+    const user = userEvent.setup();
+    await openRestore(user, DICT, 'Tutela Juan Pérez_diccionario-7F3K.json');
+    upload(new File([readFileSync('tests/fixtures/etiquetas_fin_de_linea_sintetico.pdf')], 'documento-7F3K_protegido.pdf', { type: 'application/pdf' }));
+    await user.click(await downloadButton());
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0].name).toBe('Tutela Juan Pérez-restaurado.pdf');
   }, 20000);
 
   it('un archivo que no es .docx ni .pdf se rechaza', async () => {
