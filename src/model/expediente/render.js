@@ -4,6 +4,8 @@ import { formatPageRanges } from './document.js';
 
 const LABEL_NOTE = 'Los datos personales se reemplazaron por etiquetas entre corchetes, como [PERSONA_N] o [EMPRESA_N]. '
   + 'Son las mismas en todas las partes: úsalas tal cual en tus respuestas, sin intentar adivinar los datos reales.';
+// La nota que llevaban las exportaciones anteriores (ejemplos con número): esos PDF siguen en los discos (FIX-6).
+const OLD_LABEL_NOTE = LABEL_NOTE.replace('[PERSONA_N] o [EMPRESA_N]', '[PERSONA_1] o [EMPRESA_2]');
 
 /**
  * Unidad con la que se ubica el texto: folios del PDF, páginas del Word (según su última paginación)
@@ -99,6 +101,7 @@ const HEAD_LINES = [
   `(?:Expediente\\s+completo|Pasajes\\s+seleccionados\\s+del\\s+expediente)\\s+·\\s+${RANGE}`,
   `\\[Instrucción\\s+para\\s+la\\s+IA\\][\\s\\S]{0,400}?espera\\s+(?:la\\s+siguiente|mi\\s+pregunta)\\.`,
   loose(LABEL_NOTE),
+  loose(OLD_LABEL_NOTE),
   ...Object.values(UNITS).map((u) => u.note).filter(Boolean).map(loose),
   `(?:El\\s+primer\\s+párrafo\\s+repite|Los\\s+primeros\\s+\\d+\\s+párrafos\\s+repiten)\\s+el\\s+final\\s+de\\s+la\\s+parte\\s+anterior,\\s+solo\\s+como\\s+contexto\\.`
 ].map((p) => new RegExp(`^\\s*${p}\\s*`));

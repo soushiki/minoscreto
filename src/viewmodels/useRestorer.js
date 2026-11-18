@@ -21,11 +21,12 @@ async function readPdfText(buffer, { askPassword, fileName, signal }) {
 // Texto del PDF → etiquetas partidas vueltas a unir (C5) → valores reales. Rápido: se repite con cada diccionario.
 function restorePdfText(text, dictionary) {
   const joined = rejoinTags(text, dictionary);
-  const restored = restoreText(joined.text, dictionary);
+  // El encabezado para la IA («(anonimizado)», notas de etiquetas) y las marcas [Folio N] no son parte del documento.
+  // Se quitan antes de restaurar: los ejemplos de etiquetas de la nota no deben volverse nombres reales (FIX-6).
+  const restored = restoreText(stripPageMarkers(stripAiHeader(joined.text)), dictionary);
   return {
     kind: 'pdf',
-    // El encabezado para la IA («(anonimizado)», notas de etiquetas) y las marcas [Folio N] no son parte del documento.
-    text: stripPageMarkers(stripAiHeader(restored.text)),
+    text: restored.text,
     counts: restored.counts,
     // Los fragmentos de etiqueta que no se pudieron unir se listan junto a las etiquetas sin entrada.
     unknown: [...restored.unknown, ...joined.broken.filter((b) => !restored.unknown.includes(b))],

@@ -226,6 +226,23 @@ describe('Restaurar: pestaña Archivo con .pdf (T10: R3, R5)', () => {
     await waitFor(() => expect(document.body.textContent).toMatch(/se omitieron/));
   }, 20000);
 
+  it('FIX-6: un PDF del formato anterior («como [PERSONA_1] o [EMPRESA_2]») no restaura los ejemplos de la nota', async () => {
+    const { writeTextPdf } = await import('../src/model/pdf/writer.js');
+    const old = ['# Caso (anonimizado)', '', 'Expediente completo · folio 1', '',
+      'Los datos personales se reemplazaron por etiquetas entre corchetes, como [PERSONA_1] o [EMPRESA_2]. '
+      + 'Son las mismas en todas las partes: úsalas tal cual en tus respuestas, sin intentar adivinar los datos reales.', '',
+      '[Folio 1]', '', 'Respondió [PERSONA_2] el lunes.'];
+    const { bytes } = await writeTextPdf({ lines: old });
+    const user = userEvent.setup();
+    await openRestore(user, { ...DICT, '[EMPRESA_2]': 'Beta Ltda' });
+    upload(new File([bytes], 'viejo.pdf', { type: 'application/pdf' }));
+    await user.click(await downloadButton());
+    await waitFor(() => expect(saved).toHaveLength(1));
+    const text = await textOf(saved[0].blob);
+    expect(text).toContain('Respondió Luis Pérez el lunes.');
+    expect(text).not.toMatch(/Ana Gómez|Beta Ltda|etiquetas entre corchetes|anonimizado/);
+  }, 20000);
+
   it('un archivo que no es .docx ni .pdf se rechaza', async () => {
     const user = userEvent.setup();
     await openRestore(user);
