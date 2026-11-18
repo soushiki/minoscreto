@@ -3,13 +3,104 @@
 # errores de OCR en algunos nombres y folios sin texto (escaneos sin OCR).
 # Uso: python scripts/make-expediente-pdf.py [salida.pdf] [folios]
 # Escribe también <salida>.verdad.json con los datos sembrados, para medir la detección.
+# Uso: python scripts/make-expediente-pdf.py --fixtures  → PDFs sintéticos de prueba en tests/fixtures/
+#      (ver tests/fixtures/README.md: cómo se hizo cada uno y su contraseña).
 import json
+import os
 import random
+import shutil
+import subprocess
 import sys
+import tempfile
 
 import pymupdf
 
-OUT = sys.argv[1] if len(sys.argv) > 1 else '.local/expediente-600.pdf'
+FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'tests', 'fixtures')
+USER_PASSWORD = 'minoscreto-prueba'
+OWNER_PASSWORD = 'propietario-prueba'
+FIXTURE_LINES = [
+    'Juzgado Tercero Civil del Circuito de Bogotá',
+    'Radicado 11001310300320230012300',
+    'Demandante: Laura Patricia Ortega Jiménez, C.C. 45.521.884',
+    'Demandada: Inversiones Bahía del Caribe S.A.S., NIT 901.234.567-8',
+    'Dirección: Calle 32 No. 8-45, teléfono 315 482 7731',
+    '¿Procede la acción? Sí: la señora Ortega acreditó el daño (artículo 1º).',
+]
+
+
+def _text_pdf(lines, path, **save_opts):
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)  # Carta
+    y = 72
+    for line in lines:
+        page.insert_text((72, y), line, fontsize=11, fontname='helv')
+        y += 16
+    doc.set_metadata({'producer': 'Minoscreto fixtures', 'creator': 'Minoscreto fixtures'})
+    doc.save(path, garbage=3, deflate=True, **save_opts)
+    doc.close()
+
+
+# Respuesta anonimizada con etiquetas cortadas al final de línea, como las deja una exportación a PDF.
+# Las claves del diccionario van en el .json del mismo nombre.
+SPLIT_LINES = [
+    'Resumen del caso',
+    'La demandante [PERSONA_1] reclama a [EMPRE-',
+    'SA_1] el pago de la indemnización. El apoderado [PERSONA_',
+    '2] pidió pruebas. [PERSONA_1] vive en [DIRECCION_1',
+    '] y su cédula es [CEDULA_1]. Un texto normal [entre corchetes',
+    'y con salto] no es una etiqueta y debe quedar igual.',
+    'Contacto: [TELEFONO_1]. Fin.',
+]
+SPLIT_KEYS = ['[PERSONA_1]', '[PERSONA_2]', '[EMPRESA_1]', '[DIRECCION_1]', '[CEDULA_1]', '[TELEFONO_1]']
+
+CHROME_HTML = '''<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Respuesta</title>
+<style>body{font-family:Arial,sans-serif;font-size:12pt;margin:0}main{width:62mm}
+td{border:1px solid #888;padding:2px;word-break:break-all;width:28mm}</style></head><body><main>
+<h1>Análisis del caso</h1>
+<p>• [PERSONA_1] demandó a [EMPRESA_1] por incumplimiento del contrato firmado en [DIRECCION_1].</p>
+<p>• El apoderado [PERSONA_2] presentó la cédula [CEDULA_1] y el teléfono [TELEFONO_1].</p>
+<p>“Conclusión”: la pretensión de [PERSONA_1] procede según el artículo 1º.</p>
+<table><tr><td>[PERSONA_1][EMPRESA_1]</td><td>[DIRECCION_1][CEDULA_1]</td></tr></table>
+</main></body></html>'''
+
+
+def _chrome():
+    for p in (r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+              r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe', shutil.which('chrome')):
+        if p and os.path.exists(p):
+            return p
+    raise SystemExit('No encuentro Chrome para la fixture chrome_guardar_como_sintetico.pdf')
+
+
+def make_fixtures():
+    os.makedirs(FIXTURES, exist_ok=True)
+    out = lambda name: os.path.join(FIXTURES, name)  # noqa: E731
+    _text_pdf(FIXTURE_LINES, out('contrasena_usuario_sintetico.pdf'), encryption=pymupdf.PDF_ENCRYPT_AES_256,
+              user_pw=USER_PASSWORD, owner_pw=OWNER_PASSWORD,
+              permissions=pymupdf.PDF_PERM_ACCESSIBILITY | pymupdf.PDF_PERM_COPY | pymupdf.PDF_PERM_PRINT)
+    _text_pdf(FIXTURE_LINES, out('solo_propietario_sintetico.pdf'), encryption=pymupdf.PDF_ENCRYPT_AES_256,
+              user_pw='', owner_pw=OWNER_PASSWORD, permissions=pymupdf.PDF_PERM_ACCESSIBILITY)
+    _text_pdf(SPLIT_LINES, out('etiquetas_fin_de_linea_sintetico.pdf'))
+    with open(out('etiquetas_fin_de_linea_sintetico.json'), 'w', encoding='utf-8') as f:
+        json.dump({'keys': SPLIT_KEYS}, f, ensure_ascii=False, indent=2)
+    with tempfile.TemporaryDirectory() as tmp:
+        html = os.path.join(tmp, 'respuesta.html')
+        with open(html, 'w', encoding='utf-8') as f:
+            f.write(CHROME_HTML)
+        pdf = os.path.abspath(out('chrome_guardar_como_sintetico.pdf'))
+        subprocess.run([_chrome(), '--headless=new', '--disable-gpu', '--no-pdf-header-footer',
+                        f'--user-data-dir={os.path.join(tmp, "perfil")}', f'--print-to-pdf={pdf}',
+                        'file:///' + html.replace('\\', '/')], check=True, timeout=120,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    for name in sorted(os.listdir(FIXTURES)):
+        print(name, os.path.getsize(out(name)), 'bytes')
+
+
+if len(sys.argv) > 1 and sys.argv[1] == '--fixtures':
+    make_fixtures()
+    sys.exit(0)
+
+OUT =sys.argv[1] if len(sys.argv) > 1 else '.local/expediente-600.pdf'
 PAGES = int(sys.argv[2]) if len(sys.argv) > 2 else 600
 rng = random.Random(7)
 
