@@ -36,7 +36,9 @@ export function useRestorer({ save, notify }) {
   const [mode, setMode] = useState('paste');
   const [pasted, setPasted] = useState('');
   const [word, setWord] = useState(null);
-  const [wordResult, setWordResult] = useState(null);
+  // El resultado guarda de qué archivo y diccionario salió: uno viejo nunca se muestra ni descarga con el nombre del nuevo.
+  const [restored, setRestored] = useState(null);
+  const wordResult = restored && restored.word === word && restored.dictionary === dictionary ? restored.result : null;
   const deferredText = useDeferredValue(pasted);
   const abortRef = useRef(null);
   const passwordPrompt = usePasswordPrompt({ onCancel: () => abortRef.current?.abort() });
@@ -48,7 +50,7 @@ export function useRestorer({ save, notify }) {
   );
 
   useEffect(() => {
-    if (!word || !dictionary) { setWordResult(null); return undefined; }
+    if (!word || !dictionary) { setRestored(null); return undefined; }
     let cancelled = false;
     const controller = new AbortController();
     abortRef.current = controller;
@@ -58,12 +60,12 @@ export function useRestorer({ save, notify }) {
     run
       .then((result) => {
         if (cancelled) return;
-        setWordResult(result);
+        setRestored({ word, dictionary, result });
         if (result.dropped?.length) notify('Algunos caracteres no se pueden escribir en el PDF y se omitieron. Revisa el archivo.', true);
       })
       .catch((error) => {
         if (cancelled) return;
-        setWordResult(null);
+        setRestored(null);
         if (error?.code === 'aborted' || error?.code === 'cancelled') return; // el usuario canceló: sin aviso
         notify(word.kind === 'pdf' ? (error?.message || 'No se pudo procesar el PDF.') : 'No se pudo procesar el Word.', true);
       })

@@ -150,6 +150,21 @@ describe('Restaurar: pestaña Archivo con .pdf (T10: R3, R5)', () => {
     expect(document.body.textContent).not.toMatch(/No se pudo procesar|No se abrió/);
   }, 20000);
 
+  it('FIX-1: un archivo nuevo oculta el resultado anterior hasta terminar de leerse', async () => {
+    const user = userEvent.setup();
+    await openRestore(user);
+    upload(new File([await buildDocx(['Según [PERSONA_1].'])], 'A.docx'));
+    await screen.findByRole('button', { name: 'Descargar Word restaurado' });
+    upload(fixture('contrasena_usuario_sintetico')); // se queda esperando la contraseña: lectura "lenta"
+    await waitFor(() => expect(openDialog()).toBeTruthy());
+    expect(screen.queryByRole('button', { name: /Descargar .* restaurado/ })).toBeNull();
+    await user.type(openDialog().querySelector('input'), `${RIGHT}{Enter}`);
+    await user.click(await screen.findByRole('button', { name: 'Descargar PDF restaurado' }));
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0].name).toBe('contrasena_usuario_sintetico-restaurado.pdf');
+    expect(saved[0].blob.type).toBe('application/pdf');
+  }, 20000);
+
   it('un archivo que no es .docx ni .pdf se rechaza', async () => {
     const user = userEvent.setup();
     await openRestore(user);
