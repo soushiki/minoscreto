@@ -1,4 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { writeTextPdf } from '../src/model/pdf/writer.js';
+import { readPdfPages } from '../src/model/expediente/pdfjs.js';
+
+vi.mock('pdfjs-dist', async () => ({ ...(await import('pdfjs-dist/legacy/build/pdf.mjs')), GlobalWorkerOptions: {} }));
+vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?worker&inline', () => ({ default: class {} }));
 import { renderWhole, renderParts, stripAiHeader, stripPageMarkers } from '../src/model/expediente/render.js';
 
 // Pedido del usuario 2026-11-18: el PDF restaurado seguía diciendo «(anonimizado)» y traía las notas para la IA.
@@ -59,5 +64,25 @@ describe('stripAiHeader', () => {
     expect(stripAiHeader(own)).toBe(own);
     const body = 'Respuesta de la IA.\n\n# Expediente (anonimizado)\n\nExpediente completo · folio 1';
     expect(stripAiHeader(body)).toBe(body);
+  });
+
+  // FIX-2 (6-test 2026-11-18): un nombre largo se parte en dos renglones en el PDF y puede traer corchetes.
+  it('quita el encabezado cuando el título largo (70 caracteres, con [ ]) se parte en el PDF escrito y leído', async () => {
+    const name = 'Tutela [2026-00123] Juzgado Segundo Civil Municipal de Cartagena final';
+    expect(name).toHaveLength(70);
+    const md = renderWhole({ name, blocks, emptyPages: [], unit: 'folio' });
+    const { bytes } = await writeTextPdf({ lines: md.split('\n') });
+    const pages = await readPdfPages(bytes, {});
+    const text = pages.map((p) => p.lines.map((l) => (typeof l === 'string' ? l : l.text)).join('\n')).join('\n');
+    expect(text.split('\n').findIndex((l) => l.includes('(anonimizado)'))).toBeGreaterThan(0); // de verdad se partió
+    const out = stripAiHeader(text);
+    expect(out.startsWith(`# ${name}\n\n`)).toBe(true);
+    expect(out).not.toMatch(/anonimizado|Expediente\s+completo|etiquetas\s+entre|\[PERSONA_N\]|marca\s+dónde/);
+    expect(out).toContain('CONTRATO DE ARRENDAMIENTO');
+  }, 20000);
+
+  it('un título entre líneas en blanco no se une con el párrafo anterior', () => {
+    const text = 'Informe del juzgado\n\nCaso (anonimizado)\n\nExpediente completo · folio 1';
+    expect(stripAiHeader(text)).toBe(text);
   });
 });

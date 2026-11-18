@@ -99,7 +99,8 @@ const HEAD_LINES = [
   ...Object.values(UNITS).map((u) => u.note).filter(Boolean).map(loose),
   `(?:El\\s+primer\\s+párrafo\\s+repite|Los\\s+primeros\\s+\\d+\\s+párrafos\\s+repiten)\\s+el\\s+final\\s+de\\s+la\\s+parte\\s+anterior,\\s+solo\\s+como\\s+contexto\\.`
 ].map((p) => new RegExp(`^\\s*${p}\\s*`));
-const TITLE = /^\s*(?:#\s+)?([^\n[\]]{1,300}?)\s+\(anonimizado\)\s*/;
+// El título puede partirse en varios renglones (nombres largos) y llevar corchetes, pero nunca cruza una línea en blanco.
+const TITLE = /^\s*(?:#\s+)?((?:[^\n]|\n(?![ \t]*\n)){1,300}?)\s+\(anonimizado\)\s*/;
 const PART = new RegExp(`^\\s*Parte\\s+\\d+\\s+de\\s+\\d+\\s+·\\s+${RANGE}\\s*`);
 
 /**
