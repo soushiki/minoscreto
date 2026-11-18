@@ -125,6 +125,19 @@ export function stripAiHeader(text) {
   return title ? `# ${title}\n\n${rest}` : rest;
 }
 
+// Las marcas que pone renderBlocks en su propia línea: [Folio N], [Página N] y «[Folios sin texto legible: …]».
+const MARK_TITLES = Object.values(UNITS).filter((u) => u.marker).map((u) => u.title).join('|');
+const PAGE_MARK_LINE = new RegExp(`^[ \\t]*\\[(?:${MARK_TITLES})\\s+\\d+\\][ \\t]*(?:\\n|$)`, 'gm');
+const EMPTY_MARK_LINE = new RegExp(`^[ \\t]*\\[(?:${MARK_TITLES})s\\s+sin\\s+texto\\s+legible:[^\\]]{0,300}\\][ \\t]*(?:\\n|$)`, 'gm');
+
+/**
+ * Quita las marcas de folio o página que escribimos para que la IA cite: el documento restaurado no las tenía.
+ * Solo líneas que son únicamente la marca; una cita dentro de una frase («ver [Folio 2]») y el […] de una selección quedan.
+ */
+export function stripPageMarkers(text) {
+  return text.replace(EMPTY_MARK_LINE, '').replace(PAGE_MARK_LINE, '').replace(/\n{3,}/g, '\n\n').replace(/^\n+/, '');
+}
+
 const pad = (n, total) => String(n).padStart(String(total).length, '0');
 
 export function partFileName(name, number, total, ext = 'md') {

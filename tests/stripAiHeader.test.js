@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderWhole, renderParts, stripAiHeader } from '../src/model/expediente/render.js';
+import { renderWhole, renderParts, stripAiHeader, stripPageMarkers } from '../src/model/expediente/render.js';
 
 // Pedido del usuario 2026-11-18: el PDF restaurado seguía diciendo «(anonimizado)» y traía las notas para la IA.
 const blocks = [
@@ -37,6 +37,21 @@ describe('stripAiHeader', () => {
       expect(out).not.toMatch(/Parte\s+\d|Instrucción|etiquetas\s+entre|párrafo\s+repite|marca\s+dónde/);
       expect(out.trim().length).toBeGreaterThan(0);
     }
+  });
+
+  // Pedido del usuario 2026-11-18: el documento original no tiene marcas [Folio N]; el PDF restaurado tampoco.
+  it('stripPageMarkers quita las líneas [Folio N] / [Página N] y «sin texto legible»; deja citas dentro de frases y […]', () => {
+    const text = renderWhole({ name: 'Caso', blocks: [...blocks, { index: 5, page: 6, text: 'Final, ver [Folio 2] arriba.' }],
+      emptyPages: [3, 4, 5], unit: 'folio' });
+    const out = stripPageMarkers(stripAiHeader(text));
+    expect(out).not.toMatch(/^\s*\[Folio \d+\]\s*$/m);
+    expect(out).not.toMatch(/sin texto legible/);
+    expect(out).toContain('Final, ver [Folio 2] arriba.');
+    expect(out).not.toMatch(/\n{3,}/);
+    const pages = stripPageMarkers('[Página 1]\n\nUno.\n\n[Página 2]\n\nDos.\n');
+    expect(pages).toBe('Uno.\n\nDos.\n');
+    const sel = renderWhole({ name: 'Caso', blocks: [blocks[0], blocks[2]], emptyPages: [], selection: true, unit: 'folio' });
+    expect(stripPageMarkers(stripAiHeader(sel))).toContain('[…]');
   });
 
   it('un texto que no empieza con nuestro encabezado no cambia, aunque tenga esas frases más abajo', () => {

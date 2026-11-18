@@ -2,7 +2,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import { buildDocx, DOCX_MIME, readDictionaryFrom, restoreDocx, restoreText } from '../model/index.js';
 import { readPdfPages } from '../model/expediente/pdfjs.js';
 import { rejoinTags } from '../model/pdf/rejoin.js';
-import { stripAiHeader } from '../model/expediente/render.js';
+import { stripAiHeader, stripPageMarkers } from '../model/expediente/render.js';
 import { usePasswordPrompt } from './usePasswordPrompt.js';
 
 const isPdf = (name) => /\.pdf$/i.test(name);
@@ -17,8 +17,8 @@ async function restorePdf(buffer, dictionary, { askPassword, fileName, signal })
   const joined = rejoinTags(pages.map((p) => withoutOurFooter(p.lines.map(lineText)).join('\n')).join('\n'), dictionary);
   const restored = restoreText(joined.text, dictionary);
   const { writeTextPdf } = await import('../model/pdf/writer.js'); // ADR-001: pdf-lib solo se carga al escribir
-  // El encabezado que escribimos para la IA («(anonimizado)», notas de etiquetas) no es parte del documento.
-  const { bytes, dropped } = await writeTextPdf({ lines: stripAiHeader(restored.text).split('\n') });
+  // El encabezado para la IA («(anonimizado)», notas de etiquetas) y las marcas [Folio N] no son parte del documento.
+  const { bytes, dropped } = await writeTextPdf({ lines: stripPageMarkers(stripAiHeader(restored.text)).split('\n') });
   return {
     kind: 'pdf',
     blob: new Blob([bytes], { type: 'application/pdf' }),
