@@ -360,6 +360,36 @@ describe('PasswordDialog + usePasswordPrompt (T7: R1, A1, S1, S3)', () => {
     expect(window.location.href).toBe(before);
   }, 20000);
 
+  it('con pdf.js real: cancelar la lectura justo después de la contraseña correcta da «aborted», sin páginas', async () => {
+    const { readPdfPages } = await import('../src/model/expediente/pdfjs.js');
+    const controller = new AbortController();
+    const ref = { current: null };
+    // La lectura se cancela en el mismo instante en que la contraseña correcta sale del diálogo.
+    const H = forwardRef(function H(_, r) {
+      const pw = usePasswordPrompt();
+      useImperativeHandle(r, () => pw, [pw]);
+      return <PasswordDialog prompt={pw.prompt} onSubmit={(v) => { pw.submit(v); controller.abort(); }} onCancel={pw.cancel} />;
+    });
+    const user = userEvent.setup();
+    render(<H ref={ref} />);
+    let reading;
+    act(() => { reading = readPdfPages(fixture('contrasena_usuario'), { askPassword: ref.current.askPassword, signal: controller.signal }); });
+    const outcome = reading.then((pages) => `leído ${pages.length}`, (e) => e.code);
+    await waitFor(() => expect(dialog().hasAttribute('open')).toBe(true));
+    await user.type(input(), `${RIGHT}{Enter}`);
+    await expect(outcome).resolves.toBe('aborted');
+    expect(dialog().hasAttribute('open')).toBe(false);
+  }, 20000);
+
+  it('con pdf.js real: cancelar durante la última página no devuelve páginas («aborted»)', async () => {
+    const { readPdfPages } = await import('../src/model/expediente/pdfjs.js');
+    const controller = new AbortController();
+    const onProgress = (n, total) => { if (n === total) controller.abort(); };
+    const outcome = readPdfPages(fixture('contrasena_usuario'), { askPassword: async () => RIGHT, signal: controller.signal, onProgress })
+      .then((pages) => `leído ${pages.length}`, (e) => e.code);
+    await expect(outcome).resolves.toBe('aborted');
+  }, 20000);
+
   it('ADR-002 (grep): el hook y el diálogo no tocan almacenamiento, consola, URL ni red, ni guardan la contraseña', () => {
     for (const file of ['src/viewmodels/usePasswordPrompt.js', 'src/components/PasswordDialog.jsx']) {
       const code = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');

@@ -63,11 +63,15 @@ export async function readPdfPages(data, { askPassword, fileName = '', onProgres
       });
     };
   }
+  // Cancelar la lectura detiene pdf.js también después de la contraseña (task.promise rechaza → 'aborted').
+  const stopOnAbort = () => { task.destroy().catch(() => {}); };
+  signal?.addEventListener('abort', stopOnAbort, { once: true });
   let pdf;
   try {
     pdf = await task.promise;
   } catch (error) {
     task.destroy().catch(() => {});
+    signal?.removeEventListener('abort', stopOnAbort);
     if (signal?.aborted) throw new PdfError('Lectura cancelada.', 'aborted');
     if (cancelled) throw new PdfError('No se abrió el PDF: se canceló la contraseña.', 'cancelled');
     if (error?.name === 'PasswordException') throw new PdfError('El PDF está protegido con contraseña.', 'password');
@@ -83,8 +87,14 @@ export async function readPdfPages(data, { askPassword, fileName = '', onProgres
       page.cleanup();
       onProgress?.(n, pdf.numPages);
     }
+    // Una cancelación durante la última página no devuelve una lectura cancelada.
+    if (signal?.aborted) throw new PdfError('Lectura cancelada.', 'aborted');
     return pages;
+  } catch (error) {
+    if (signal?.aborted) throw new PdfError('Lectura cancelada.', 'aborted');
+    throw error;
   } finally {
-    task.destroy();
+    signal?.removeEventListener('abort', stopOnAbort);
+    task.destroy().catch(() => {});
   }
 }
