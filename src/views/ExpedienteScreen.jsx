@@ -1,3 +1,4 @@
+import PasswordDialog from '../components/PasswordDialog.jsx';
 import DropZone from '../components/DropZone.jsx';
 import CategoryList from './anonymize/CategoryList.jsx';
 import SummaryCard from './expediente/SummaryCard.jsx';
@@ -40,6 +41,15 @@ function Progress({ vm }) {
 }
 
 export default function ExpedienteScreen({ vm }) {
+  return (
+    <>
+      <Body vm={vm} />
+      <PasswordDialog prompt={vm.password.prompt} onSubmit={vm.password.submit} onCancel={vm.password.cancel} />
+    </>
+  );
+}
+
+function Body({ vm }) {
   if (vm.status === 'idle') return <main><div className="wrap xp-solo"><Intro vm={vm} /></div></main>;
   if (vm.status !== 'ready') return <main><div className="wrap xp-solo"><Progress vm={vm} /></div></main>;
   return (

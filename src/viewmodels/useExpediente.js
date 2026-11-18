@@ -6,6 +6,7 @@ import {
 import { expedienteReducer, initialExpediente } from './expedienteState.js';
 import { runExpedienteTask } from './expedienteWorker.js';
 import { useProtectedDownload } from './useProtectedDownload.js';
+import { usePasswordPrompt } from './usePasswordPrompt.js';
 
 const keyOf = (p) => `${p.page}:${p.text}`;
 const variantKey = (s) => `${s.entityId}:${s.variant}`;
@@ -15,6 +16,9 @@ export function useExpediente({ save, notify }) {
   const [state, dispatch] = useReducer(expedienteReducer, initialExpediente);
   const { docs, entities, reduce, applied, appliedFor, selected, scope, format, split, query } = state;
   const abort = useRef(null);
+  // Cancelar en el diálogo corta la lectura en curso, igual que «Cancelar» de la pantalla de progreso (sin aviso).
+  const password = usePasswordPrompt({ onCancel: () => { abort.current?.abort(); dispatch({ type: 'failed' }); } });
+  const { askPassword, close: closePassword } = password;
   const protectedDownload = useProtectedDownload({ save, notify });
   const { clear: clearReceipt, downloadPair, downloadBundle, copyText } = protectedDownload;
   useEffect(() => { clearReceipt(); }, [docs, clearReceipt]);
@@ -105,12 +109,14 @@ export function useExpediente({ save, notify }) {
     let lastPaint = 0;
     const pages = await readPdfPages(new Uint8Array(buffer), {
       signal,
+      askPassword,
+      fileName: file.name,
       onProgress: (done, total) => {
         if (done === total || now() - lastPaint > 80) { lastPaint = now(); dispatch({ type: 'progress', done, total }); }
       }
     });
     return { pages };
-  }, []);
+  }, [askPassword]);
 
   const loadFile = useCallback(async (file) => {
     if (!file) return;
@@ -145,12 +151,14 @@ export function useExpediente({ save, notify }) {
         ? `Expediente leído (${n} ${names.many}). ${empty} ${empty === 1 ? 'folio no tiene' : 'folios no tienen'} texto: revisa el aviso.`
         : `Expediente leído: ${n} ${n === 1 ? names.one : names.many}. Revisa los datos detectados y exporta.`);
     } catch (error) {
-      if (error?.code === 'aborted') return;
+      if (error?.code === 'aborted' || error?.code === 'cancelled') return;
       dispatch({ type: 'failed' });
       if (isWord) notify(error instanceof DocxError ? 'Este archivo no parece un Word válido. ¿Está protegido con contraseña?' : 'No se pudo leer el Word.', true);
       else notify(error?.code ? error.message : `No se pudo leer el PDF: ${error?.message || 'error'}`, true);
+    } finally {
+      if (abort.current === controller) closePassword();
     }
-  }, [notify, readSource]);
+  }, [notify, readSource, closePassword]);
 
   const cancel = useCallback(() => { abort.current?.abort(); dispatch({ type: 'failed' }); }, []);
 
@@ -160,7 +168,12 @@ export function useExpediente({ save, notify }) {
     const t = now();
     const dict = { name: dictionaryFileName(state.name), text: dictionaryJson(dictionary) };
     try {
-      if (rendered.length === 1) {
+      if (rendered.length === 1 && state.kind === 'pdf') {
+        const { writeTextPdf } = await import('../model/pdf/writer.js');
+        const { bytes, dropped } = await writeTextPdf({ lines: rendered[0].text.split('\n') });
+        if (dropped.length) notify('Algunos caracteres que el PDF no admite se omitieron. Revisa el archivo antes de subirlo.', true);
+        await downloadPair({ name: protectedFileName(state.name, 'pdf'), blob: new Blob([bytes], { type: 'application/pdf' }) }, dict);
+      } else if (rendered.length === 1) {
         await downloadPair({ name: protectedFileName(state.name, 'md'), blob: new Blob([rendered[0].text], { type: 'text/markdown;charset=utf-8' }) }, dict);
       } else {
         const blob = await buildPartsZip({ name: state.name, parts: rendered, dictionary });
@@ -170,7 +183,7 @@ export function useExpediente({ save, notify }) {
     } catch (error) {
       notify(`No se pudo exportar: ${error.message}`, true);
     }
-  }, [rendered, state.name, dictionary, downloadPair, downloadBundle, notify]);
+  }, [rendered, state.name, state.kind, dictionary, downloadPair, downloadBundle, notify]);
 
   /** Copia el texto de una parte (o del archivo único) para pegarlo en la IA sin descomprimir nada. */
   const copyPart = useCallback((index = 0) => {
@@ -226,6 +239,7 @@ export function useExpediente({ save, notify }) {
     query, search, selectedCount: selected.size, scope, format, split, parts, rendered, outputTokens,
     canExport: ready && blocks.length > 0 && !blocked, timings: state.timings, ackEmpty: state.ackEmpty,
     receipt: protectedDownload.receipt, downloadDictionaryAgain: protectedDownload.downloadDictionaryAgain,
+    password: { prompt: password.prompt, submit: password.submit, cancel: password.cancel },
     actions, loadFile, cancel, download, copyPart, renameEntity, addQueryAsValue
   };
 }

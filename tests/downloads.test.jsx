@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, cleanup, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import JSZip from 'jszip';
+import { readFileSync } from 'node:fs';
 import App from '../src/App.jsx';
 import { goToTools } from './helpers.js';
 import {
@@ -10,6 +11,28 @@ import {
 import { buildPartsZip, renderParts, splitParts, anonymizeTexts } from '../src/model/expediente/index.js';
 import { DICTIONARY_DELAY } from '../src/viewmodels/useProtectedDownload.js';
 import { isAppleTouch } from '../src/viewmodels/platform.js';
+
+// jsdom no tiene Worker: pdf.js corre su build legacy en el mismo hilo (como en passwordDialog.test.jsx).
+// slowFirstDestroy: la primera lectura tarda en rechazar tras cancelarse, para que su `finally` llegue después de la pregunta del archivo nuevo.
+const slow = vi.hoisted(() => ({ on: false, calls: 0 }));
+vi.mock('pdfjs-dist', async () => {
+  const real = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  return {
+    ...real,
+    GlobalWorkerOptions: {},
+    getDocument: (...args) => {
+      const task = real.getDocument(...args);
+      if (slow.on && slow.calls++ === 0) {
+        const original = task.promise;
+        Object.defineProperty(task, 'promise', {
+          value: original.catch((e) => new Promise((_, reject) => setTimeout(() => reject(e), 1500)))
+        });
+      }
+      return task;
+    }
+  };
+});
+vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?worker&inline', () => ({ default: class {} }));
 
 const encode = (s) => new TextEncoder().encode(s);
 let downloads;
@@ -25,7 +48,7 @@ beforeEach(() => {
   URL.revokeObjectURL = vi.fn();
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function click() { downloads.push(this.download); });
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { slow.on = false; cleanup(); vi.restoreAllMocks(); });
 
 const mockClipboard = () => {
   const writeText = vi.fn(() => Promise.resolve());
@@ -139,6 +162,63 @@ describe('descarga y copia en la app', () => {
     await user.click(screen.getByRole('button', { name: 'Descargar' }));
     await waitFor(() => expect(downloads).toEqual(['caso_protegido.md', 'caso_diccionario.json']), { timeout: DICTIONARY_DELAY + 3000 });
   }, 20000);
+
+  describe('PDF con contraseña', () => {
+    const RIGHT = 'minoscreto-prueba';
+    const pdfFile = () => new File([readFileSync('tests/fixtures/contrasena_usuario_sintetico.pdf')], 'caso.pdf');
+    const open = async (user) => {
+      render(<App />);
+      await goToTools(user);
+      await user.click(screen.getByRole('button', { name: 'Expediente' }));
+      fireEvent.change(document.querySelector('input[type="file"][accept^=".pdf"]'), { target: { files: [pdfFile()] } });
+    };
+    const field = () => document.querySelector('dialog input');
+
+    it('pide la contraseña, la acepta y descarga un .pdf cuyo texto es el del Markdown anonimizado', async () => {
+      const user = userEvent.setup();
+      const blobs = [];
+      URL.createObjectURL = vi.fn((b) => { blobs.push(b); return 'blob:prueba'; });
+      await open(user);
+      await waitFor(() => expect(document.querySelector('dialog').hasAttribute('open')).toBe(true), { timeout: 8000 });
+      await user.type(field(), `${RIGHT}{Enter}`);
+      await waitFor(() => expect(document.querySelector('.xp-pre')).toBeTruthy(), { timeout: 8000 });
+      expect(document.querySelector('dialog').hasAttribute('open')).toBe(false);
+      await user.click(screen.getByRole('button', { name: 'Descargar' }));
+      await waitFor(() => expect(downloads).toEqual(['caso_protegido.pdf', 'caso_diccionario.json']), { timeout: DICTIONARY_DELAY + 3000 });
+      expect(document.querySelector('.toast')?.textContent ?? '').not.toMatch(/omitieron/);
+      const bytes = new Uint8Array(await blobs[0].arrayBuffer());
+      const { readPdfPages } = await import('../src/model/expediente/pdfjs.js');
+      const pages = await readPdfPages(bytes);
+      const pdfText = pages.flatMap((p) => p.lines.map((l) => (typeof l === 'string' ? l : l.text ?? ''))).join(' ').replace(/\s+/g, ' ');
+      const md = document.querySelector('.xp-pre').textContent.replace(/\s+/g, ' ');
+      expect(pdfText.length).toBeGreaterThan(20);
+      for (const word of md.split(' ').filter((w) => w.length > 3)) expect(pdfText).toContain(word);
+      expect(pdfText).toMatch(/\[[A-Z_]+_\d+\]/);
+    }, 30000);
+
+    it('soltar otro archivo mientras se pide la contraseña deja abierta la pregunta del nuevo', async () => {
+      const user = userEvent.setup();
+      slow.on = true; slow.calls = 0;
+      await open(user);
+      await waitFor(() => expect(document.querySelector('dialog').hasAttribute('open')).toBe(true), { timeout: 8000 });
+      // Durante la lectura no hay selector de archivo: el segundo archivo llega soltándolo en la ventana.
+      fireEvent.drop(window, { dataTransfer: { files: [pdfFile()], types: ['Files'] } });
+      await new Promise((r) => setTimeout(r, 2500));
+      expect(document.querySelector('dialog').hasAttribute('open')).toBe(true);
+      await user.type(field(), `${RIGHT}{Enter}`);
+      await waitFor(() => expect(document.querySelector('.xp-pre')).toBeTruthy(), { timeout: 8000 });
+    }, 30000);
+
+    it('Cancelar en el diálogo corta la lectura sin aviso y vuelve a la pantalla inicial', async () => {
+      const user = userEvent.setup();
+      await open(user);
+      await waitFor(() => expect(document.querySelector('dialog').hasAttribute('open')).toBe(true), { timeout: 8000 });
+      await user.click(within(document.querySelector('dialog')).getByRole('button', { name: 'Cancelar' }));
+      await waitFor(() => expect(document.querySelector('dialog').hasAttribute('open')).toBe(false));
+      await waitFor(() => expect(screen.getByText('Expediente en PDF o Word')).toBeTruthy());
+      expect(document.querySelector('.toast')).toBeNull();
+    }, 20000);
+  });
 
   it('Expediente en partes: un botón de copiar por parte y un .zip con todo', async () => {
     const user = userEvent.setup();
