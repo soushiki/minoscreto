@@ -19,7 +19,7 @@ export function usePasswordPrompt({ onCancel } = {}) {
   const [prompt, setPrompt] = useState(null);
   const pending = useRef(null);
   const detachAbort = useRef(null);
-  const attempts = useRef(0);
+  const attempts = useRef(0); // nunca vuelve a 0: cada pregunta nueva tiene su número y el diálogo vacía la entrada
   const checking = useRef(false);
   const readKey = useRef(null);
   const dismissedKey = useRef(null);
@@ -40,7 +40,6 @@ export function usePasswordPrompt({ onCancel } = {}) {
   const close = useCallback(() => {
     settle(null);
     stopListening();
-    attempts.current = 0;
     checking.current = false;
     readKey.current = null;
     dismissedKey.current = null;

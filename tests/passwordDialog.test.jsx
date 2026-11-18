@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor, act, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, act, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import { forwardRef, useImperativeHandle } from 'react';
@@ -218,6 +218,37 @@ describe('PasswordDialog + usePasswordPrompt (T7: R1, A1, S1, S3)', () => {
     act(() => b.abort());
     await expect(second).resolves.toBeNull();
     expect(ref.current.prompt).toBeNull();
+  });
+
+  it('una pregunta que reemplaza a otra empieza vacía: lo escrito para un archivo nunca se envía para otro', async () => {
+    const { ref, user, ask } = setup();
+    const a = new AbortController();
+    ask({ fileName: 'uno.pdf', signal: a.signal });
+    await user.type(input(), 'clave-de-uno');
+    const second = ask({ fileName: 'dos.pdf' });
+    expect(input().value).toBe('');
+    expect(openBtn().disabled).toBe(true);
+    // Cierre y nueva apertura en el mismo render (soltar otro archivo cancela la lectura y abre otra).
+    await user.type(input(), 'clave-de-dos');
+    let third;
+    act(() => { ref.current.close(); third = ref.current.askPassword({ fileName: 'tres.pdf' }); });
+    await expect(second).resolves.toBeNull();
+    expect(screen.getByText('tres.pdf')).toBeTruthy();
+    expect(input().value).toBe('');
+    expect(openBtn().disabled).toBe(true);
+    act(() => ref.current.cancel());
+    await expect(third).resolves.toBeNull();
+  });
+
+  it('Enter durante la composición de un IME no envía', async () => {
+    const onSubmit = vi.fn();
+    render(<PasswordDialog prompt={{ fileName: 'a.pdf', reason: 'need', attempt: 1, checking: false }} onSubmit={onSubmit} onCancel={() => {}} />);
+    fireEvent.input(input(), { target: { value: 'parcial' } });
+    fireEvent.keyDown(input(), { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(input(), { key: 'Enter', keyCode: 229 });
+    expect(onSubmit).not.toHaveBeenCalled();
+    fireEvent.keyDown(input(), { key: 'Enter' });
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith('parcial');
   });
 
   it('desmontar responde null a la pregunta pendiente', async () => {

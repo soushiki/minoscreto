@@ -30,6 +30,12 @@ export default function PasswordDialog({ prompt, onSubmit, onCancel }) {
     }
   }, [open]);
 
+  // Cada pregunta nueva empieza vacía, también si reemplaza a otra sin que el diálogo llegue a cerrarse (React puede
+  // juntar el cierre y la nueva apertura en un solo render): nunca se envía lo escrito para otro archivo.
+  useEffect(() => {
+    clearInput();
+  }, [prompt?.attempt]);
+
   // El foco nunca se pierde: en la entrada al preguntar, en «Cancelar» mientras la entrada está desactivada.
   useEffect(() => {
     if (!open) return;
@@ -49,7 +55,7 @@ export default function PasswordDialog({ prompt, onSubmit, onCancel }) {
   };
 
   const handleInputKeyDown = (event) => {
-    if (event.key !== 'Enter') return;
+    if (event.key !== 'Enter' || event.nativeEvent?.isComposing || event.keyCode === 229) return;
     event.preventDefault();
     submitNow();
   };
