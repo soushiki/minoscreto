@@ -88,6 +88,43 @@ export function renderParts({ blocks, parts, emptyPages, selection = false, unit
   });
 }
 
+// Las mismas frases de arriba, con cualquier espacio o salto de línea entre palabras: el PDF las parte en renglones.
+const loose = (s) => s.trim().split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
+const UNIT_WORDS = Object.values(UNITS).flatMap((u) => [u.one, u.many]).join('|');
+const RANGE = `(?:${UNIT_WORDS})\\s+\\d+(?:\\s*–\\s*\\d+)?`;
+const HEAD_LINES = [
+  `(?:Expediente\\s+completo|Pasajes\\s+seleccionados\\s+del\\s+expediente)\\s+·\\s+${RANGE}`,
+  `\\[Instrucción\\s+para\\s+la\\s+IA\\][\\s\\S]{0,400}?espera\\s+(?:la\\s+siguiente|mi\\s+pregunta)\\.`,
+  loose(LABEL_NOTE),
+  ...Object.values(UNITS).map((u) => u.note).filter(Boolean).map(loose),
+  `(?:El\\s+primer\\s+párrafo\\s+repite|Los\\s+primeros\\s+\\d+\\s+párrafos\\s+repiten)\\s+el\\s+final\\s+de\\s+la\\s+parte\\s+anterior,\\s+solo\\s+como\\s+contexto\\.`
+].map((p) => new RegExp(`^\\s*${p}\\s*`));
+const TITLE = /^\s*(?:#\s+)?([^\n[\]]{1,300}?)\s+\(anonimizado\)\s*/;
+const PART = new RegExp(`^\\s*Parte\\s+\\d+\\s+de\\s+\\d+\\s+·\\s+${RANGE}\\s*`);
+
+/**
+ * Quita del principio de un texto restaurado el encabezado que escribimos solo para la IA (renderWhole, partHeader):
+ * título «(anonimizado)», alcance, instrucciones y notas sobre etiquetas. El título queda como el nombre del documento.
+ * Solo actúa si el texto empieza con nuestro título o con «Parte n de N»; el resto del documento no se toca.
+ */
+export function stripAiHeader(text) {
+  let rest = text;
+  let title = null;
+  const t = rest.match(TITLE);
+  // Nuestro título siempre va seguido de la línea de alcance: sin ella es el título propio del documento.
+  if (t && HEAD_LINES[0].test(rest.slice(t[0].length))) { title = t[1].replace(/\s+/g, ' '); rest = rest.slice(t[0].length); }
+  else if (PART.test(rest)) rest = rest.replace(PART, '');
+  else return text;
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const re of HEAD_LINES) {
+      const m = rest.match(re);
+      if (m) { rest = rest.slice(m[0].length); changed = true; }
+    }
+  }
+  return title ? `# ${title}\n\n${rest}` : rest;
+}
+
 const pad = (n, total) => String(n).padStart(String(total).length, '0');
 
 export function partFileName(name, number, total, ext = 'md') {

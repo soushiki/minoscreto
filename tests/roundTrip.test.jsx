@@ -9,6 +9,7 @@ import { readDictionaryFrom, restoreText } from '../src/model/index.js';
 import { dictionaryVariants } from '../src/model/dictionary.js';
 import { toWinAnsi } from '../src/model/pdf/winAnsi.js';
 import { DICTIONARY_DELAY } from '../src/viewmodels/useProtectedDownload.js';
+import { stripAiHeader } from '../src/model/expediente/render.js';
 
 // T11 ida y vuelta (S1–S3, R1–R3): PDF con contraseña → anonimizar → .pdf sin contraseña → restaurar → texto original.
 // Otro PDF: ROUNDTRIP_PDF=<ruta> ROUNDTRIP_PASSWORD=<clave> ROUNDTRIP_OUT=<carpeta> (guarda los PDF para abrirlos).
@@ -139,9 +140,11 @@ describe('ida y vuelta PDF (T11)', () => {
     expect(rest.encrypted).toBe(false);
     const restText = stripFooters(rest.pages);
     // Completo: igual al texto anonimizado con cada etiqueta cambiada por su valor real, y ninguna etiqueta queda.
-    expect(restText).toBe(expectedFrom(restoreText(md, dict).text));
+    // Sin el encabezado para la IA: el título vuelve a ser el nombre, sin «(anonimizado)» ni notas de etiquetas.
+    expect(restText).toBe(expectedFrom(stripAiHeader(restoreText(md, dict).text)));
     expect(restText).not.toMatch(/\[[A-Z_]+_\d+\]/);
-    expect(restText).toContain('[PERSONA_N]'); // el ejemplo genérico no se toca al restaurar
+    expect(restText).not.toMatch(/anonimizado|\[PERSONA_N\]|etiquetas entre corchetes|Expediente completo/);
+    expect(restText.startsWith(STEM)).toBe(true);
 
     // Y frente al PDF original: cada valor real vuelve tantas veces como su etiqueta aparecía.
     const original = stripFooters((await pdfText(new Uint8Array(readFileSync(SOURCE)), PASSWORD || undefined)).pages);
