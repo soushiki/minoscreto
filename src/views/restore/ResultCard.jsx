@@ -36,7 +36,9 @@ function FromWord({ vm }) {
       <p><span className="stat">{total(r.counts)} etiquetas restauradas</span> <span className="muted">· {vm.word.name}</span></p>
       <Unknown list={r.unknown} />
       <div className="row-btns">
-        <button type="button" className="btn primary" onClick={vm.downloadRestoredWord}>Descargar Word restaurado</button>
+        <button type="button" className="btn primary" onClick={vm.downloadRestoredWord}>
+          {vm.word.kind === 'pdf' ? 'Descargar PDF restaurado' : 'Descargar Word restaurado'}
+        </button>
       </div>
       <Missing dictionary={vm.dictionary} counts={r.counts} where="el documento" />
     </>
@@ -49,7 +51,7 @@ export default function ResultCard({ vm }) {
   else if (vm.mode === 'paste') {
     content = vm.pastedResult ? <Pasted vm={vm} /> : <p className="muted">Pega la respuesta de la IA para ver el texto con los datos reales.</p>;
   } else {
-    content = vm.wordResult ? <FromWord vm={vm} /> : <p className="muted">Sube el Word que generó la IA para reemplazar las etiquetas por los datos reales.</p>;
+    content = vm.wordResult ? <FromWord vm={vm} /> : <p className="muted">Sube el Word o el PDF que generó la IA para reemplazar las etiquetas por los datos reales.</p>;
   }
   return (
     <section className="card">

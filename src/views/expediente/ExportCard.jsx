@@ -91,7 +91,9 @@ export default function ExportCard({ vm }) {
       <p className="muted">
         {multi
           ? 'Se descarga un solo archivo comprimido: las partes en «para-subir-a-la-IA» y el diccionario en «NO-SUBIR». También puede copiar cada parte y pegarla en la IA. '
-          : 'Se descargan dos archivos: el texto protegido y su diccionario. '}
+          : vm.kind === 'pdf'
+            ? 'Se descargan dos archivos: el texto protegido (.pdf) y su diccionario. '
+            : 'Se descargan dos archivos: el texto protegido y su diccionario. '}
         Para recuperar los nombres en la respuesta de la IA, use «Restaurar nombres» con el diccionario.
       </p>
       <p className="xp-times muted">Tiempos: lectura {secs(t.readMs)} · párrafos {secs(t.layoutMs)} · detección {secs(t.detectMs)} · anonimizar {secs(t.applyMs)} · exportar {secs(t.exportMs)}</p>

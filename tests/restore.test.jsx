@@ -116,7 +116,7 @@ describe('Restaurar: pestaña Archivo con .pdf (T10: R3, R5)', () => {
     upload(fixture('contrasena_usuario_sintetico'));
     await waitFor(() => expect(openDialog()).toBeTruthy());
     await user.type(openDialog().querySelector('input'), `${RIGHT}{Enter}`);
-    await user.click(await downloadButton());
+    await user.click(await screen.findByRole('button', { name: 'Descargar PDF restaurado' }));
     await waitFor(() => expect(saved).toHaveLength(1));
     expect(saved[0].name).toBe('contrasena_usuario_sintetico-restaurado.pdf');
     expect(openDialog()).toBeNull();
