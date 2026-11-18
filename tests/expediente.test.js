@@ -224,6 +224,54 @@ describe('división en partes', () => {
     expect(readme).toContain('Recuperar los nombres reales');
   });
 
+  describe('zip con PDF por parte (T9)', () => {
+    const parts = [
+      { number: 1, text: 'Parte 1 de 2\n\nEl [PERSONA_1] firmó.\n' },
+      { number: 2, text: 'Parte 2 de 2\n\nVive [EMPRESA_2] aquí.\n' }
+    ];
+    const dictionary = { '[PERSONA_1]': 'Ana', '[EMPRESA_2]': 'ACME' };
+    const list = (zip) => Object.keys(zip.files).filter((f) => !f.endsWith('/')).sort();
+
+    it('con pdf:true trae .pdf y .md por parte, y cada PDF se lee con sus etiquetas enteras', async () => {
+      const zip = await JSZip.loadAsync(await buildPartsZip({ name: 'caso', parts, dictionary, type: 'uint8array', pdf: true }));
+      expect(list(zip)).toEqual([
+        'LEAME.txt', 'NO-SUBIR/caso_diccionario.json',
+        'para-subir-a-la-IA/caso_parte-1-de-2.md', 'para-subir-a-la-IA/caso_parte-1-de-2.pdf',
+        'para-subir-a-la-IA/caso_parte-2-de-2.md', 'para-subir-a-la-IA/caso_parte-2-de-2.pdf'
+      ]);
+      expect(await zip.file('para-subir-a-la-IA/caso_parte-1-de-2.md').async('string')).toBe(parts[0].text);
+      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      for (const [k, tag] of [[1, '[PERSONA_1]'], [2, '[EMPRESA_2]']]) {
+        const data = await zip.file(`para-subir-a-la-IA/caso_parte-${k}-de-2.pdf`).async('uint8array');
+        const task = pdfjs.getDocument({ data, isEvalSupported: false, verbosity: 0 });
+        const doc = await task.promise;
+        const content = await (await doc.getPage(1)).getTextContent();
+        expect(content.items.map((i) => i.str).join('\n')).toContain(tag);
+        await task.destroy();
+      }
+      expect(await zip.file('LEAME.txt').async('string')).toContain('Cada parte viene en dos formatos, .pdf y .md, con el mismo texto: suba solo uno de los dos.');
+    });
+
+    it('con pdf:false (o sin pasarlo) da la lista y el LEAME de siempre', async () => {
+      const a = await JSZip.loadAsync(await buildPartsZip({ name: 'caso', parts, dictionary, type: 'uint8array' }));
+      const b = await JSZip.loadAsync(await buildPartsZip({ name: 'caso', parts, dictionary, type: 'uint8array', pdf: false }));
+      expect(list(a)).toEqual(['LEAME.txt', 'NO-SUBIR/caso_diccionario.json', 'para-subir-a-la-IA/caso_parte-1-de-2.md', 'para-subir-a-la-IA/caso_parte-2-de-2.md']);
+      expect(list(b)).toEqual(list(a));
+      expect(await b.file('LEAME.txt').async('string')).toBe(await a.file('LEAME.txt').async('string'));
+      expect(await a.file('LEAME.txt').async('string')).not.toContain('dos formatos');
+    });
+
+    it('onDropped recibe una sola vez la unión de caracteres omitidos, y no se llama si no hay', async () => {
+      const onDropped = vi.fn();
+      await buildPartsZip({ name: 'caso', parts: [{ number: 1, text: 'a 😀 b' }, { number: 2, text: 'c 😀 ∑' }], dictionary, type: 'uint8array', pdf: true, onDropped });
+      expect(onDropped).toHaveBeenCalledTimes(1);
+      expect(onDropped.mock.calls[0][0].length).toBeGreaterThan(0);
+      const none = vi.fn();
+      await buildPartsZip({ name: 'caso', parts, dictionary, type: 'uint8array', pdf: true, onDropped: none });
+      expect(none).not.toHaveBeenCalled();
+    });
+  });
+
   it('marca folios sin texto y saltos de una selección', () => {
     const blocks = [{ index: 0, page: 1, text: 'A' }, { index: 1, page: 1, text: 'B' }, { index: 5, page: 4, text: 'C' }, { index: 6, page: 4, text: 'D' }];
     expect(renderBlocks(blocks, [2, 3])).toBe('[Folio 1]\n\nA\n\nB\n\n[…]\n\n[Folios sin texto legible: 2–3]\n\n[Folio 4]\n\nC\n\nD\n');

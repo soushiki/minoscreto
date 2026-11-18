@@ -90,11 +90,11 @@ export function renderParts({ blocks, parts, emptyPages, selection = false, unit
 
 const pad = (n, total) => String(n).padStart(String(total).length, '0');
 
-export function partFileName(name, number, total) {
-  return `${safeName(name)}_parte-${pad(number, total)}-de-${total}.md`;
+export function partFileName(name, number, total, ext = 'md') {
+  return `${safeName(name)}_parte-${pad(number, total)}-de-${total}.${ext}`;
 }
 
-const README = (name, total) => `${name}: documento protegido en ${total} partes
+const README = (name, total, pdf = false) => `${name}: documento protegido en ${total} partes
 ${'='.repeat(40)}
 
 Este archivo comprimido trae dos carpetas:
@@ -102,7 +102,7 @@ Este archivo comprimido trae dos carpetas:
 1. «para-subir-a-la-IA»: el texto con los nombres y datos personales cambiados por etiquetas
    como [PERSONA_1]. Suba a la IA (ChatGPT, Claude, Gemini u otra) las ${total} partes, en orden,
    una tras otra. Cada parte le pide a la IA que espere hasta tenerlas todas. Cuando la IA
-   confirme que recibió las ${total} partes, haga su pregunta.
+   confirme que recibió las ${total} partes, haga su pregunta.${pdf ? '\n   Cada parte viene en dos formatos, .pdf y .md, con el mismo texto: suba solo uno de los dos.' : ''}
 
 2. «NO-SUBIR»: el diccionario, la llave que dice qué nombre real corresponde a cada etiqueta.
    Guárdelo en un lugar seguro. NUNCA lo suba a la IA ni lo comparta.
@@ -115,12 +115,22 @@ Todo se hizo en su computador: el documento no se envió a ningún servidor.
 `;
 
 /** Expediente en partes: un solo .zip con las partes para la IA, el diccionario aparte y LEAME.txt. */
-export async function buildPartsZip({ name, parts, dictionary, type = 'blob' }) {
+export async function buildPartsZip({ name, parts, dictionary, type = 'blob', pdf = false, onDropped }) {
   const zip = new JSZip();
   const total = parts.length;
   const folder = zip.folder('para-subir-a-la-IA');
-  for (const p of parts) folder.file(partFileName(name, p.number, total), p.text);
+  const dropped = [];
+  const writer = pdf ? await import('../pdf/writer.js') : null;
+  for (const p of parts) {
+    if (writer) {
+      const out = await writer.writeTextPdf({ lines: p.text.split('\n') });
+      dropped.push(...out.dropped);
+      folder.file(partFileName(name, p.number, total, 'pdf'), out.bytes);
+    }
+    folder.file(partFileName(name, p.number, total), p.text);
+  }
+  if (dropped.length) onDropped?.(dropped);
   zip.folder('NO-SUBIR').file(dictionaryFileName(name), dictionaryJson(dictionary));
-  zip.file('LEAME.txt', README(safeName(name), total));
+  zip.file('LEAME.txt', README(safeName(name), total, pdf));
   return zip.generateAsync({ type, compression: 'DEFLATE', compressionOptions: { level: 6 } });
 }

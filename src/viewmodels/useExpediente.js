@@ -176,7 +176,10 @@ export function useExpediente({ save, notify }) {
       } else if (rendered.length === 1) {
         await downloadPair({ name: protectedFileName(state.name, 'md'), blob: new Blob([rendered[0].text], { type: 'text/markdown;charset=utf-8' }) }, dict);
       } else {
-        const blob = await buildPartsZip({ name: state.name, parts: rendered, dictionary });
+        const blob = await buildPartsZip({
+          name: state.name, parts: rendered, dictionary, pdf: state.kind === 'pdf',
+          onDropped: () => notify('Algunos caracteres no se pueden escribir en el PDF y se omitieron. Revisa el archivo.', true)
+        });
         await downloadBundle({ name: protectedFileName(state.name, 'zip'), blob }, dict);
       }
       dispatch({ type: 'exported', ms: now() - t });
