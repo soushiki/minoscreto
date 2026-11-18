@@ -24,16 +24,52 @@ export class PdfError extends Error {
   }
 }
 
-/** Lee todas las páginas: [{ number, lines }]. Llama a onProgress(hechas, total) y respeta signal.aborted. */
-export async function readPdfPages(data, { onProgress, signal } = {}) {
+// Espera la respuesta de askPassword; si signal se cancela antes, responde null sin esperar al diálogo.
+function waitForPassword(askPassword, request, signal) {
+  return new Promise((resolve) => {
+    if (signal?.aborted) { resolve(null); return; }
+    const onAbort = () => resolve(null);
+    signal?.addEventListener('abort', onAbort, { once: true });
+    Promise.resolve()
+      .then(() => askPassword(request))
+      .then((answer) => resolve(typeof answer === 'string' ? answer : null), () => resolve(null))
+      .finally(() => signal?.removeEventListener('abort', onAbort));
+  });
+}
+
+/**
+ * Lee todas las páginas: [{ number, lines }]. Llama a onProgress(hechas, total) y respeta signal.aborted.
+ * Si el PDF pide contraseña y hay askPassword({ fileName, reason: 'need'|'incorrect', signal }), la contraseña
+ * se pasa a updatePassword en la misma tarea de pdf.js y no se guarda en ningún otro lado (ADR-002).
+ * askPassword → null: PdfError 'cancelled'. Sin askPassword: PdfError 'password', como antes.
+ */
+export async function readPdfPages(data, { askPassword, fileName = '', onProgress, signal } = {}) {
   const pdfjs = await loadPdfjs();
   const task = pdfjs.getDocument({
     data, isEvalSupported: false, disableFontFace: true, disableAutoFetch: true, disableStream: true, verbosity: 0
   });
+  let cancelled = false;
+  if (askPassword) {
+    const incorrect = pdfjs.PasswordResponses?.INCORRECT_PASSWORD ?? 2;
+    task.onPassword = (updatePassword, code) => {
+      const reason = code === incorrect ? 'incorrect' : 'need';
+      waitForPassword(askPassword, { fileName, reason, signal }, signal).then((answer) => {
+        if (answer === null || signal?.aborted) {
+          cancelled = true;
+          updatePassword(new Error('cancelled'));
+        } else {
+          updatePassword(answer);
+        }
+      });
+    };
+  }
   let pdf;
   try {
     pdf = await task.promise;
   } catch (error) {
+    task.destroy().catch(() => {});
+    if (signal?.aborted) throw new PdfError('Lectura cancelada.', 'aborted');
+    if (cancelled) throw new PdfError('No se abrió el PDF: se canceló la contraseña.', 'cancelled');
     if (error?.name === 'PasswordException') throw new PdfError('El PDF está protegido con contraseña.', 'password');
     throw new PdfError('No se pudo leer el PDF.', 'invalid');
   }

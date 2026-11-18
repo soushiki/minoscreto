@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
 import JSZip from 'jszip';
 import { buildEntities, buildDictionary, createEntity, addAlias } from '../src/model/index.js';
 import {
@@ -303,5 +304,88 @@ describe('tramos contiguos de una misma entidad', () => {
     const ents = addAlias([base], base.id, 'castro');
     const out = anonymizeTexts(['Fidel castro y castro Fidel; solo castro.'], ents);
     expect(out.texts[0]).toBe('[PERSONA_1] y [PERSONA_1]; solo [PERSONA_1].');
+  });
+});
+
+// C1 con pdf.js real: en las pruebas se usa la versión legacy (Node) y su worker falso, no el worker en línea de Vite.
+vi.mock('pdfjs-dist', async () => ({ ...(await import('pdfjs-dist/legacy/build/pdf.mjs')), GlobalWorkerOptions: {} }));
+vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?worker&inline', () => ({ default: class {} }));
+
+const RIGHT = 'minoscreto-prueba';
+const fixture = (name) => new Uint8Array(readFileSync(`tests/fixtures/${name}_sintetico.pdf`));
+const pageText = (pages) => pages.flatMap((p) => p.lines.map((l) => l.text)).join('\n');
+const answers = (...list) => vi.fn(async () => list.shift() ?? null);
+
+describe('PDF con contraseña (C1, R1, S1)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('abre con la contraseña correcta, preguntando una vez con el nombre del archivo y la señal', async () => {
+    const { readPdfPages } = await import('../src/model/expediente/pdfjs.js');
+    const signal = new AbortController().signal;
+    const askPassword = answers(RIGHT);
+    const pages = await readPdfPages(fixture('contrasena_usuario'), { askPassword, fileName: 'caso.pdf', signal });
+    expect(askPassword).toHaveBeenCalledTimes(1);
+    expect(askPassword).toHaveBeenCalledWith({ fileName: 'caso.pdf', reason: 'need', signal });
+    expect(pageText(pages)).toContain('Laura Patricia Ortega Jiménez');
+  });
+
+  it('con una contraseña mala vuelve a preguntar con reason «incorrect» y luego abre', async () => {
+    const { readPdfPages } = await import('../src/model/expediente/pdfjs.js');
+    const askPassword = answers('mala', 'otra-mala', RIGHT);
+    const pages = await readPdfPages(fixture('contrasena_usuario'), { askPassword, fileName: 'caso.pdf' });
+    expect(askPassword.mock.calls.map(([r]) => r.reason)).toEqual(['need', 'incorrect', 'incorrect']);
+    expect(pageText(pages)).toContain('Radicado 11001310300320230012300');
+  });
+
+  it('cancelar (null) da PdfError «cancelled», también si askPassword falla', async () => {
+    const { readPdfPages, PdfError } = await import('../src/model/expediente/pdfjs.js');
+    const cancel = readPdfPages(fixture('contrasena_usuario'), { askPassword: answers(null) });
+    await expect(cancel).rejects.toBeInstanceOf(PdfError);
+    await expect(cancel).rejects.toMatchObject({ code: 'cancelled' });
+    const broken = vi.fn(async () => { throw new Error('diálogo roto'); });
+    await expect(readPdfPages(fixture('contrasena_usuario'), { askPassword: broken })).rejects.toMatchObject({ code: 'cancelled' });
+  });
+
+  it('si se cancela la lectura mientras pregunta, termina con «aborted» sin esperar al diálogo', async () => {
+    const { readPdfPages } = await import('../src/model/expediente/pdfjs.js');
+    const controller = new AbortController();
+    const askPassword = vi.fn(() => { setTimeout(() => controller.abort(), 0); return new Promise(() => {}); });
+    await expect(readPdfPages(fixture('contrasena_usuario'), { askPassword, signal: controller.signal }))
+      .rejects.toMatchObject({ code: 'aborted' });
+  });
+
+  it('el PDF solo con contraseña de propietario abre sin preguntar', async () => {
+    const { readPdfPages } = await import('../src/model/expediente/pdfjs.js');
+    const askPassword = answers(RIGHT);
+    const pages = await readPdfPages(fixture('solo_propietario'), { askPassword });
+    expect(askPassword).not.toHaveBeenCalled();
+    expect(pageText(pages)).toContain('Laura Patricia Ortega Jiménez');
+  });
+
+  it('sin askPassword los llamadores de antes siguen recibiendo «password»', async () => {
+    const { readPdfPages } = await import('../src/model/expediente/pdfjs.js');
+    await expect(readPdfPages(fixture('contrasena_usuario'))).rejects.toMatchObject({ code: 'password' });
+  });
+
+  it('ADR-002: la contraseña no llega a almacenamiento, consola ni URL', async () => {
+    const { readPdfPages } = await import('../src/model/expediente/pdfjs.js');
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+    const logs = ['log', 'info', 'warn', 'error', 'debug'].map((m) => vi.spyOn(console, m));
+    const before = window.location.href;
+    await readPdfPages(fixture('contrasena_usuario'), { askPassword: answers('mala', RIGHT) });
+    expect(setItem).not.toHaveBeenCalled();
+    for (const spy of logs) expect(spy.mock.calls.flat().join(' ')).not.toContain(RIGHT);
+    expect(window.location.href).toBe(before);
+    expect(window.location.href).not.toContain(RIGHT);
+  });
+
+  it('ADR-002 (grep): pdfjs.js no toca almacenamiento, consola, URL ni red, ni guarda la contraseña en el módulo', () => {
+    const src = readFileSync('src/model/expediente/pdfjs.js', 'utf8');
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(code, 'ADR-002: password code must not touch storage, logs or network')
+      .not.toMatch(/localStorage|sessionStorage|indexedDB|console\.|location|fetch\(|XMLHttpRequest|sendBeacon/);
+    const moduleScope = [...code.matchAll(/^(?:let|var|const)\s+(\w+)/gm)].map(([, name]) => name);
+    expect(moduleScope).toEqual(['pdfjsPromise']);
+    expect(code).not.toMatch(/\bpassword\w*\s*=(?!=)/i);
   });
 });
