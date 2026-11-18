@@ -6,11 +6,14 @@ import { usePasswordPrompt } from './usePasswordPrompt.js';
 
 const isPdf = (name) => /\.pdf$/i.test(name);
 const lineText = (line) => (typeof line === 'string' ? line : line.text);
+// El pie «Página n de N» que pone nuestro escritor (C4) no es texto del documento: el PDF restaurado lleva el suyo.
+const OUR_FOOTER = /^\s*Página \d+ de \d+\s*$/;
+const withoutOurFooter = (lines) => (lines.length && OUR_FOOTER.test(lines[lines.length - 1]) ? lines.slice(0, -1) : lines);
 
 // PDF → texto (C1) → etiquetas partidas vueltas a unir (C5) → valores reales → PDF nuevo (C4, solo bajo demanda).
 async function restorePdf(buffer, dictionary, { askPassword, fileName, signal }) {
   const pages = await readPdfPages(new Uint8Array(buffer), { askPassword, fileName, signal });
-  const joined = rejoinTags(pages.map((p) => p.lines.map(lineText).join('\n')).join('\n'), dictionary);
+  const joined = rejoinTags(pages.map((p) => withoutOurFooter(p.lines.map(lineText)).join('\n')).join('\n'), dictionary);
   const restored = restoreText(joined.text, dictionary);
   const { writeTextPdf } = await import('../model/pdf/writer.js'); // ADR-001: pdf-lib solo se carga al escribir
   const { bytes, dropped } = await writeTextPdf({ lines: restored.text.split('\n') });
@@ -54,7 +57,7 @@ export function useRestorer({ save, notify }) {
       .then((result) => {
         if (cancelled) return;
         setWordResult(result);
-        if (result.dropped?.length) notify('Algunos caracteres no se pueden escribir en el PDF y se omitieron.');
+        if (result.dropped?.length) notify('Algunos caracteres no se pueden escribir en el PDF y se omitieron. Revisa el archivo.', true);
       })
       .catch((error) => {
         if (cancelled) return;
