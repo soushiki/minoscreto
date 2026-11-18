@@ -14,11 +14,14 @@ function dictionaryNeedles(dict) {
   });
 }
 
+// [PERSONA_N], [EMPRESA_N]: ejemplos genéricos del párrafo de instrucciones para la IA, nunca etiquetas reales.
+const GENERIC_EXAMPLE = /_N\]$/;
+
 function unknownPlaceholders(text, found, dict) {
   const unknown = [];
   for (const m of text.matchAll(PLACEHOLDER)) {
     const covered = found.some((o) => o.start <= m.index && m.index < o.end);
-    if (!covered && dict[m[0]] === undefined) unknown.push(m[0]);
+    if (!covered && dict[m[0]] === undefined && !GENERIC_EXAMPLE.test(m[0])) unknown.push(m[0]);
   }
   return unknown;
 }

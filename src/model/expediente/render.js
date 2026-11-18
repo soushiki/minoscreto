@@ -2,7 +2,7 @@ import JSZip from 'jszip';
 import { dictionaryFileName, dictionaryJson, safeName } from '../protectedFiles.js';
 import { formatPageRanges } from './document.js';
 
-const LABEL_NOTE = 'Los datos personales se reemplazaron por etiquetas entre corchetes, como [PERSONA_1] o [EMPRESA_2]. '
+const LABEL_NOTE = 'Los datos personales se reemplazaron por etiquetas entre corchetes, como [PERSONA_N] o [EMPRESA_N]. '
   + 'Son las mismas en todas las partes: úsalas tal cual en tus respuestas, sin intentar adivinar los datos reales.';
 
 /**

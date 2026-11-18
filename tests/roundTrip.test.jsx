@@ -78,10 +78,9 @@ describe('ida y vuelta PDF (T11)', () => {
     const md = copied;
     const tagsInMd = md.match(/\[[A-Z_]+_\d+\]/g) || [];
     expect(tagsInMd.length).toBeGreaterThan(0);
-    // Las únicas etiquetas sin entrada: los ejemplos del párrafo de instrucciones para la IA («como [PERSONA_1] o [EMPRESA_2]»).
-    const notInDict = [...new Set(tagsInMd.filter((t) => !Object.hasOwn(dict, t)))];
-    const intro = md.split('\n').find((l) => l.includes('etiquetas entre corchetes')) ?? '';
-    for (const t of notInDict) expect(intro, `${t} sin entrada fuera del párrafo de instrucciones`).toContain(t);
+    // Toda etiqueta del texto tiene su entrada: el párrafo de instrucciones para la IA usa ejemplos genéricos ([PERSONA_N]).
+    expect([...new Set(tagsInMd.filter((t) => !Object.hasOwn(dict, t)))]).toEqual([]);
+    expect(md).toContain('[PERSONA_N]');
 
     // El .pdf protegido: sin contraseña, sin ningún valor real del diccionario, con todas las etiquetas.
     const protectedBytes = await bytesOf(protectedPdf.blob);
@@ -109,8 +108,7 @@ describe('ida y vuelta PDF (T11)', () => {
     await waitFor(() => expect(saved.length).toBe(firstRound + 1));
     const restored = saved[saved.length - 1];
     expect(restored.name).toBe(`${STEM}_protegido-restaurado.pdf`);
-    const note = document.querySelector('.note')?.textContent ?? '';
-    expect((note.match(/\[[A-Z_]+_\d+\]/g) || []).sort()).toEqual([...notInDict].sort());
+    expect(document.body.textContent).not.toContain('Sin entrada en el diccionario');
 
     const restoredBytes = await bytesOf(restored.blob);
     const rest = await pdfText(restoredBytes);
@@ -118,7 +116,8 @@ describe('ida y vuelta PDF (T11)', () => {
     const restText = stripFooters(rest.pages);
     // Completo: igual al texto anonimizado con cada etiqueta cambiada por su valor real, y ninguna etiqueta queda.
     expect(restText).toBe(expectedFrom(restoreText(md, dict).text));
-    for (const t of restText.match(/\[[A-Z_]+_\d+\]/g) || []) expect(notInDict).toContain(t);
+    expect(restText).not.toMatch(/\[[A-Z_]+_\d+\]/);
+    expect(restText).toContain('[PERSONA_N]'); // el ejemplo genérico no se toca al restaurar
 
     // Y frente al PDF original: cada valor real vuelve tantas veces como su etiqueta aparecía.
     const original = stripFooters((await pdfText(new Uint8Array(readFileSync(SOURCE)), PASSWORD || undefined)).pages);
