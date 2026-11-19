@@ -2,3 +2,8 @@ node_modules/
 dist/
 .env
 .local/
+
+# Local working notes (kept in a private repo, never committed here)
+/CLAUDE.md
+/.claude
+/docs/sdlc
