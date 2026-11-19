@@ -41,7 +41,7 @@
 
 <p>Minoscreto cambia los nombres, cédulas, NIT, direcciones, teléfonos, correos, cuentas, radicados y placas de un documento por etiquetas como <code>[PERSONA_1]</code>. Todo ocurre en tu computador: Claude solo recibe el texto con etiquetas. Al final, Minoscreto vuelve a poner los datos reales en el resultado y lo guarda en tu computador.</p>
 
-<p><b>Necesitas:</b> Claude Desktop con la pestaña <b>Code</b> y el archivo <code>minoscreto.mcpb</code> que vino con esta guía.</p>
+<p><b>Necesitas:</b> Claude Desktop con la pestaña <b>Code</b> y los archivos <code>minoscreto.mcpb</code> e <code>instalar-minoscreto.txt</code> que vinieron con esta guía. Si falta Node.js (un programa que Minoscreto necesita), Claude lo instala en la parte 1.</p>
 
 <h2>1. Instalar <small>(una sola vez · unos 10 minutos)</small></h2>
 <ol>
@@ -81,10 +81,10 @@
   <li>Revisa que lo primero que haga Claude sea usar <b>anonimizar</b> de Minoscreto.</li>
   <li>Revisa el resumen de datos ocultos que muestra Claude (cuántas personas, cédulas, etc.).</li>
 </ol>
-<p>Junto al documento original aparecen dos archivos nuevos:</p>
+<p>Junto al documento original aparecen dos archivos nuevos. El código de 4 letras y números (aquí <code>7K3D</code>) cambia cada vez:</p>
 <table class="files">
-  <tr><td><code>documento-XXXX_protegido.md</code></td><td>El texto con etiquetas. Este sí se puede compartir.</td></tr>
-  <tr><td><code>Caso Pérez_diccionario-XXXX.json</code></td><td>Los datos reales. No lo compartas ni se lo pidas a Claude.</td></tr>
+  <tr><td><code>documento-7K3D_protegido.md</code></td><td>El texto con etiquetas. Revísalo antes de compartirlo: puede quedar algún dato sin ocultar (ver la parte 3).</td></tr>
+  <tr><td><code>Caso Pérez_diccionario-7K3D.json</code></td><td>Los datos reales. No lo compartas ni se lo pidas a Claude.</td></tr>
 </table>
 
 <h2>3. Corregir lo que se ocultó <small>(1 minuto)</small></h2>
@@ -99,12 +99,12 @@
   <li>Pídele a Claude que restaure su respuesta. Ejemplo: <code>Restaura tu respuesta en un Word.</code></li>
   <li>Abre el archivo <code>Caso Pérez-restaurado.docx</code> que aparece en la misma carpeta. Claude te dice la ruta; los datos reales no aparecen en el chat.</li>
 </ol>
-<div class="notice note"><b>Nota:</b> también puedes restaurar un archivo que te devolvió otra IA. Ejemplo: <code>Restaura "C:\...\respuesta.docx" con el diccionario "C:\...\Caso Pérez_diccionario-XXXX.json".</code></div>
+<div class="notice note"><b>Nota:</b> también puedes restaurar un archivo que te devolvió otra IA. Ejemplo: <code>Restaura "C:\...\respuesta.docx" con el diccionario "C:\...\Caso Pérez_diccionario-7K3D.json".</code></div>
 
 <h2 class="keep">5. Bueno saber</h2>
 <ul>
   <li>Para documentos <b>sin</b> datos personales, la pestaña Code funciona como siempre.</li>
-  <li>Un PDF con contraseña no se abre: quítale la contraseña o usa <a href="https://minoscreto.netlify.app">minoscreto.netlify.app</a>.</li>
+  <li>Un PDF con contraseña no se abre: quítale la contraseña o usa la página <a href="https://minoscreto.netlify.app">minoscreto.netlify.app</a>, que también trabaja solo en tu computador.</li>
   <li>Un PDF escaneado sin texto no se puede leer: hazle OCR primero.</li>
   <li>El PDF restaurado es de texto simple, sin el diseño original. Para conservar el formato, pide Word.</li>
   <li>Ningún archivo se sobrescribe: si el nombre ya existe, se crea uno con <code>(2)</code>.</li>
