@@ -89,6 +89,16 @@ describe('ADR-004: engine stays out of the page', () => {
     expect(await ready).toEqual({ type: 'ready' });
     await self.onmessage({ data: { type: 'init', wasmBinary: new Uint8Array(wasm) } }); // un segundo init no crea otro motor
     expect(replies).toHaveLength(1);
+    // El bundle trae el wrapper de PDFium (T4): abre una fixture y da las señales de escaneo.
+    const pdf = new Uint8Array(readFileSync(resolve(root, 'tests/fixtures/tabla_sintetico.pdf')));
+    await self.onmessage({ data: { type: 'call', id: 1, method: 'open', args: [pdf, ''] } });
+    await self.onmessage({ data: { type: 'call', id: 2, method: 'pageStats', args: [0] } });
+    await self.onmessage({ data: { type: 'call', id: 3, method: 'close', args: [] } });
+    expect(replies.slice(1)).toEqual([
+      { type: 'result', id: 1, ok: true, result: { pageCount: 2 } },
+      { type: 'result', id: 2, ok: true, result: expect.objectContaining({ hasImages: false, invisibleChars: 0 }) },
+      { type: 'result', id: 3, ok: true, result: undefined }
+    ]);
   }, 60_000);
 
   it('outside a build ENGINE is null (no engine in dev or tests)', () => {
