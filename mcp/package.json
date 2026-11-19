@@ -1,7 +1,7 @@
 {
   "name": "minoscreto-mcp",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Conector local de Minoscreto para Claude Desktop: anonimiza y restaura archivos en este PC.",
   "type": "module",
   "main": "server.mjs",

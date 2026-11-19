@@ -12,7 +12,7 @@ const stage = join(build, 'minoscreto');
 
 rmSync(build, { recursive: true, force: true });
 mkdirSync(join(stage, 'mcp'), { recursive: true });
-for (const f of ['server.mjs', 'core.mjs', 'dom.mjs']) cpSync(join(here, f), join(stage, 'mcp', f));
+for (const f of ['server.mjs', 'core.mjs', 'dom.mjs', 'password.mjs']) cpSync(join(here, f), join(stage, 'mcp', f));
 cpSync(join(root, 'src', 'model'), join(stage, 'src', 'model'), { recursive: true });
 cpSync(join(here, 'manifest.json'), join(stage, 'manifest.json'));
 const pkg = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8'));

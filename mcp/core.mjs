@@ -13,6 +13,7 @@ import {
   anonymizeTexts, buildDocument, buildDocxDocument, itemsToLines, renderWhole, tidyEntities
 } from '../src/model/expediente/index.js';
 import { stripAiHeader, stripPageMarkers } from '../src/model/expediente/render.js';
+import { askPasswordWindow } from './password.mjs';
 import { readDocxParagraphs } from '../src/model/expediente/docxSource.js';
 import { rejoinTags } from '../src/model/pdf/rejoin.js';
 import { writeTextPdf } from '../src/model/pdf/writer.js';
@@ -24,6 +25,10 @@ const INPUTS = new Set(['.pdf', '.docx', '.txt', '.md']);
 const OUTPUTS = new Set(['.docx', '.pdf', '.md', '.txt']);
 const PROTECTED = /_protegido\.md$/i;
 const OUR_FOOTER = /^\s*Página \d+ de \d+\s*$/;
+const MAX_PASSWORD_TRIES = 3;
+
+/** Quien pide la contraseña: la ventana de Windows; en otro sistema no hay ventana y el PDF se rechaza. */
+const defaultAskPassword = process.platform === 'win32' ? askPasswordWindow : null;
 
 export class ToolError extends Error {}
 
@@ -61,14 +66,32 @@ async function toBytes(data) {
   return new Uint8Array(await data.arrayBuffer()); // Blob
 }
 
-async function readPdfPages(bytes) {
+async function readPdfPages(bytes, { askPassword = defaultAskPassword, fileName = '' } = {}) {
   const task = getDocument({ data: bytes, isEvalSupported: false, disableFontFace: true, verbosity: 0 });
+  let outcome = null; // 'cancelled' | 'tries' | 'window': por qué no se abrió un PDF con contraseña
+  if (askPassword) {
+    let tries = 0;
+    task.onPassword = (updatePassword, code) => {
+      const reason = code === 2 ? 'incorrect' : 'need'; // PasswordResponses.INCORRECT_PASSWORD
+      if (reason === 'incorrect' && ++tries >= MAX_PASSWORD_TRIES) { outcome = 'tries'; updatePassword(new Error('tries')); return; }
+      Promise.resolve()
+        .then(() => askPassword({ fileName, reason }))
+        .then((answer) => {
+          if (typeof answer === 'string') updatePassword(answer);
+          else { outcome = 'cancelled'; updatePassword(new Error('cancelled')); }
+        }, () => { outcome = 'window'; updatePassword(new Error('window')); });
+    };
+  }
   let pdf;
   try {
     pdf = await task.promise;
   } catch (error) {
+    task.destroy().catch(() => {});
+    if (outcome === 'cancelled') throw new ToolError('Se canceló la contraseña: el PDF no se abrió.');
+    if (outcome === 'tries') throw new ToolError(`La contraseña no fue correcta ${MAX_PASSWORD_TRIES} veces: el PDF no se abrió.`);
+    if (outcome === 'window') throw new ToolError('No se pudo mostrar la ventana para la contraseña. Quítale la contraseña al PDF y vuelve a intentarlo.');
     if (error?.name === 'PasswordException') {
-      throw new ToolError('El PDF tiene contraseña. Quítasela (o ábrelo en minoscreto.netlify.app) y vuelve a intentarlo.');
+      throw new ToolError('El PDF tiene contraseña y aquí no se puede pedir. Quítasela o ábrelo en minoscreto.netlify.app.');
     }
     throw new ToolError('No se pudo leer el PDF.');
   }
@@ -89,10 +112,10 @@ async function readPdfPages(bytes) {
 const textParagraphs = (text) => text.replace(/^\uFEFF/, '').split('\n')
   .map((line) => ({ text: line.replace(/\s+$/, ''), kind: 'main', label: '', breaks: [] }));
 
-async function readDocument(path, bytes, reduce) {
+async function readDocument(path, bytes, reduce, askPassword) {
   const ext = extname(path).toLowerCase();
   if (ext === '.pdf') {
-    const pages = await readPdfPages(bytes);
+    const pages = await readPdfPages(bytes, { askPassword, fileName: basename(path) });
     return { kind: 'pdf', build: (opts) => buildDocument(pages, opts), reduce };
   }
   let paragraphs;
@@ -126,12 +149,12 @@ function adjustEntities(entities, { mantener = [], agregar = [] }) {
  * Anonimiza un archivo. Escribe «documento-CODE_protegido.md» y «Nombre_diccionario-CODE.json» en `carpetaSalida`
  * (o junto al original) y devuelve el texto protegido (primer trozo si es largo), conteos por tipo y las rutas.
  */
-export async function anonymizeFile({ ruta, reducir = false, mantener = [], agregar = [], carpetaSalida } = {}) {
+export async function anonymizeFile({ ruta, reducir = false, mantener = [], agregar = [], carpetaSalida } = {}, { askPassword = defaultAskPassword } = {}) {
   const path = checkPath(ruta, 'del documento');
   if (!INPUTS.has(extname(path).toLowerCase())) throw new ToolError('Recibo PDF, Word (.docx), .txt o .md. Si es .doc, guárdalo como .docx en Word.');
   const outDir = carpetaSalida ? checkPath(carpetaSalida, 'de la carpeta de salida') : dirname(path);
   const bytes = await readInput(path, 'del documento');
-  const source = await readDocument(path, bytes, reducir);
+  const source = await readDocument(path, bytes, reducir, askPassword);
 
   const full = source.build();
   if (!full.paragraphs.length) {
@@ -209,7 +232,7 @@ const total = (counts) => Object.values(counts || {}).reduce((n, c) => n + c, 0)
  * Pone los valores reales en un texto de la IA (`texto`) o en un archivo suyo (`ruta`: .docx, .pdf, .md, .txt)
  * y lo escribe en disco. Devuelve la ruta, cuántas etiquetas se cambiaron y las que el diccionario no tiene.
  */
-export async function restore({ texto, ruta, diccionario, rutaSalida, formato } = {}) {
+export async function restore({ texto, ruta, diccionario, rutaSalida, formato } = {}, { askPassword = defaultAskPassword } = {}) {
   if ((texto == null) === (ruta == null)) throw new ToolError('Pasa el texto de la IA o la ruta de su archivo (uno de los dos).');
   const dictionaryPath = checkPath(diccionario, 'del diccionario');
   const dictionary = await readDictionaryFile(dictionaryPath);
@@ -232,7 +255,7 @@ export async function restore({ texto, ruta, diccionario, rutaSalida, formato } 
     }
     let raw;
     if (inExt === '.pdf') {
-      const pages = await readPdfPages(bytes);
+      const pages = await readPdfPages(bytes, { askPassword, fileName: basename(path) });
       raw = pages.map((p) => {
         const lines = p.lines.map((l) => (typeof l === 'string' ? l : l.text));
         return (lines.length && OUR_FOOTER.test(lines[lines.length - 1]) ? lines.slice(0, -1) : lines).join('\n');

@@ -57,15 +57,60 @@ describe('anonymizeFile', () => {
     await expect(anonymizeFile({ ruta: 'caso.pdf' })).rejects.toThrow(ToolError);
     await expect(anonymizeFile({ ruta: join(dir, 'x.xlsx') })).rejects.toThrow(/Recibo PDF/);
     await expect(anonymizeFile({ ruta: join(dir, 'no.pdf') })).rejects.toThrow(/No existe/);
-    await expect(anonymizeFile({ ruta: join(import.meta.dirname, 'fixtures', 'contrasena_usuario_sintetico.pdf'), carpetaSalida: dir }))
+    await expect(anonymizeFile({ ruta: join(import.meta.dirname, 'fixtures', 'contrasena_usuario_sintetico.pdf'), carpetaSalida: dir }, { askPassword: null }))
       .rejects.toThrow(/contraseña/);
   });
+
 
   it('never overwrites: a second run with the same name gets a new file', async () => {
     const ruta = await writeSample('txt');
     await anonymizeFile({ ruta });
     await anonymizeFile({ ruta });
     expect((await readdir(dir)).filter((f) => f.endsWith('.json'))).toHaveLength(2);
+  });
+});
+
+describe('PDF with a password (asked outside the chat)', () => {
+  const LOCKED = join(import.meta.dirname, 'fixtures', 'contrasena_usuario_sintetico.pdf');
+  const PASSWORD = 'minoscreto-prueba';
+  const asker = (answers) => {
+    const calls = [];
+    const fn = async (request) => { calls.push(request); return answers.shift() ?? null; };
+    return Object.assign(fn, { calls });
+  };
+
+  it('opens with the right password and never returns it', async () => {
+    const ask = asker([PASSWORD]);
+    const result = await anonymizeFile({ ruta: LOCKED, carpetaSalida: dir }, { askPassword: ask });
+    expect(ask.calls).toEqual([{ fileName: 'contrasena_usuario_sintetico.pdf', reason: 'need' }]);
+    expect(result.text.length).toBeGreaterThan(100);
+    expect(JSON.stringify(result)).not.toContain(PASSWORD);
+    for (const f of await readdir(dir)) expect(await readFile(join(dir, f), 'utf8')).not.toContain(PASSWORD);
+  });
+
+  it('asks again after a wrong password, then opens', async () => {
+    const ask = asker(['mala', PASSWORD]);
+    await anonymizeFile({ ruta: LOCKED, carpetaSalida: dir }, { askPassword: ask });
+    expect(ask.calls.map((c) => c.reason)).toEqual(['need', 'incorrect']);
+  });
+
+  it('stops after 3 wrong passwords, on cancel, and when the window fails', async () => {
+    const wrong = asker(['a', 'b', 'c', 'd']);
+    await expect(anonymizeFile({ ruta: LOCKED, carpetaSalida: dir }, { askPassword: wrong })).rejects.toThrow(/3 veces/);
+    expect(wrong.calls).toHaveLength(3);
+    await expect(anonymizeFile({ ruta: LOCKED, carpetaSalida: dir }, { askPassword: asker([]) })).rejects.toThrow(/canceló/);
+    const broken = async () => { throw new Error('window'); };
+    await expect(anonymizeFile({ ruta: LOCKED, carpetaSalida: dir }, { askPassword: broken })).rejects.toThrow(/ventana/);
+    expect(await readdir(dir)).toEqual([]);
+  });
+
+  it('restore reads a locked AI PDF with the password too', async () => {
+    const dictionaryPath = join(dir, 'Caso_diccionario-7K3D.json');
+    await writeFile(dictionaryPath, JSON.stringify({ '[PERSONA_1]': 'Nadie Real' }));
+    const ask = asker([PASSWORD]);
+    const r = await restore({ ruta: LOCKED, diccionario: dictionaryPath, formato: 'txt' }, { askPassword: ask });
+    expect(ask.calls).toHaveLength(1);
+    expect((await readFile(r.outPath, 'utf8')).length).toBeGreaterThan(50);
   });
 });
 

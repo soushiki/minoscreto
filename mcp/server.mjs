@@ -19,10 +19,11 @@ const INSTRUCTIONS = [
     + 'otra herramienta (lectura de archivos, terminal, Python, skills de PDF o Word, conectores de archivos): eso envía los datos reales.',
   '2. Trabaja solo con el texto protegido que devuelve anonimizar (y leer_protegido si es largo). Usa las etiquetas [TIPO_n] tal cual.',
   '3. Nunca abras el archivo …_diccionario-….json: tiene los datos reales. Para entregar algo con los datos reales, usa restaurar.',
-  '4. Si no tienes la ruta completa, pídesela al usuario; no busques el archivo explorando carpetas.'
+  '4. Si no tienes la ruta completa, pídesela al usuario; no busques el archivo explorando carpetas.',
+  '5. Si el PDF tiene contraseña, anonimizar abre una ventana de Windows para que el usuario la escriba. Nunca pidas la contraseña en el chat.'
 ].join('\n');
 
-const server = new McpServer({ name: 'minoscreto', version: '0.1.1' }, { instructions: INSTRUCTIONS });
+const server = new McpServer({ name: 'minoscreto', version: '0.1.2' }, { instructions: INSTRUCTIONS });
 
 const reply = (text) => ({ content: [{ type: 'text', text }] });
 const fail = (error) => ({
@@ -37,6 +38,7 @@ server.registerTool('anonimizar', {
     + 'direcciones, teléfonos, correos, cuentas, radicados y placas por etiquetas como [PERSONA_1]. Guarda junto al original '
     + '(o en carpeta_salida) el texto protegido «documento-CODIGO_protegido.md» y el diccionario «Nombre_diccionario-CODIGO.json», '
     + 'y devuelve el texto protegido para trabajar con él. Si es largo, devuelve el primer trozo: pide el resto con leer_protegido. '
+    + 'Si el PDF tiene contraseña, se abre una ventana en Windows para escribirla: avisa al usuario y nunca la pidas en el chat. '
     + `Para corregir la detección, vuelve a llamarla con mantener (etiquetas que no se ocultan) o agregar (textos que sí). ${PRIVACY}`,
   inputSchema: {
     ruta: z.string().describe('Ruta completa del documento, p. ej. C:\\Users\\Ana\\Documents\\caso.pdf'),
