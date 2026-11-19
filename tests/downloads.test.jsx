@@ -94,7 +94,14 @@ describe('archivos protegidos', () => {
     expect(nameFromDictionary('Tutela Juan Pérez_diccionario-7F3K.json')).toBe('Tutela Juan Pérez');
     expect(nameFromDictionary('Tutela Juan Pérez_diccionario-7F3K (1).json')).toBe('Tutela Juan Pérez');
     expect(nameFromDictionary('caso_diccionario.txt')).toBe('caso');
-    expect(nameFromDictionary('Tutela Juan Pérez-7F3K.zip')).toBeNull();
+    // El .zip de un expediente en partes también es nuestro: «<nombre>-<código>.zip» (y la copia «(1)» del navegador).
+    expect(nameFromDictionary('Tutela Juan Pérez-7F3K.zip')).toBe('Tutela Juan Pérez');
+    expect(nameFromDictionary('Tutela Juan Pérez-7F3K (2).zip')).toBe('Tutela Juan Pérez');
+    expect(nameFromDictionary(bundleFileName('Caso-3 Ana', exportCode()))).toBe('Caso-3 Ana');
+    // Un .zip que no es nuestro no da nombre: sin código, o con 0/1/O/I/L, que nuestro código nunca usa.
+    expect(nameFromDictionary('fotos.zip')).toBeNull();
+    expect(nameFromDictionary('respaldo-2024.zip')).toBeNull();
+    expect(nameFromDictionary('Caso-ABCDE.zip')).toBeNull();
     expect(nameFromDictionary('llave.json')).toBeNull();
     expect(nameFromDictionary('')).toBeNull();
   });

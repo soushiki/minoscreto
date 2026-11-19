@@ -19,9 +19,17 @@ export const protectedFileName = (code, ext) => `${UPLOAD_STEM}-${code}_protegid
 export const dictionaryFileName = (name, code) => `${safeName(name)}_diccionario-${code}.json`;
 export const bundleFileName = (name, code) => `${safeName(name)}-${code}.zip`;
 
-/** Nombre real del documento según el diccionario cargado («Caso_diccionario-7F3K.json» → «Caso»), o null. */
+const OUR_DICTIONARY = /^(.+?)_diccionario(?:-[A-Z0-9]{4})?(?: ?\(\d+\))?\.(?:json|txt)$/i;
+// El .zip del expediente en partes (bundleFileName): solo con un código de nuestro alfabeto, para no tomar «respaldo-2024.zip».
+const OUR_BUNDLE = new RegExp(`^(.+)-[${CODE_ALPHABET}]{4}(?: ?\\(\\d+\\))?\\.zip$`, 'i');
+
+/**
+ * Nombre real del documento según el diccionario cargado («Caso_diccionario-7F3K.json» o el .zip «Caso-7F3K.zip»
+ * → «Caso»), o null si el nombre no es de los que escribimos.
+ */
 export function nameFromDictionary(dictionaryName) {
-  const m = /^(.+?)_diccionario(?:-[A-Z0-9]{4})?(?: ?\(\d+\))?\.(?:json|txt)$/i.exec(String(dictionaryName || ''));
+  const name = String(dictionaryName || '');
+  const m = OUR_DICTIONARY.exec(name) || OUR_BUNDLE.exec(name);
   return m ? m[1] : null;
 }
 

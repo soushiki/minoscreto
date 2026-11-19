@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vite
 import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
+import JSZip from 'jszip';
 import App from '../src/App.jsx';
 import { buildDocx, openDocx } from '../src/model/index.js';
 
@@ -177,6 +178,22 @@ describe('Restaurar: pestaña Archivo con .pdf (T10: R3, R5)', () => {
     const user = userEvent.setup();
     await openRestore(user, DICT, 'Tutela Juan Pérez_diccionario-7F3K.json');
     upload(new File([readFileSync('tests/fixtures/etiquetas_fin_de_linea_sintetico.pdf')], 'documento-7F3K_protegido.pdf', { type: 'application/pdf' }));
+    await user.click(await downloadButton());
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0].name).toBe('Tutela Juan Pérez-restaurado.pdf');
+  }, 20000);
+
+  it('con el .zip del expediente en partes como diccionario, el restaurado también lleva el nombre real', async () => {
+    const user = userEvent.setup();
+    await openRestore(user, null);
+    const zip = new JSZip();
+    zip.file('Tutela Juan Pérez_diccionario-7F3K.json', JSON.stringify(DICT));
+    zip.file('para-subir-a-la-IA/documento-7F3K_parte-01-de-02.pdf', 'x');
+    const bytes = await zip.generateAsync({ type: 'uint8array' });
+    fireEvent.change(document.querySelector('input[type="file"][accept*=".zip"]'), { target: { files: [new File([bytes], 'Tutela Juan Pérez-7F3K.zip')] } });
+    await waitFor(() => expect(document.body.textContent).toContain(`${Object.keys(DICT).length} etiquetas`));
+    await user.click(screen.getByRole('button', { name: 'Archivo' }));
+    upload(new File([readFileSync('tests/fixtures/etiquetas_fin_de_linea_sintetico.pdf')], 'documento-7F3K_parte-01-de-02.pdf', { type: 'application/pdf' }));
     await user.click(await downloadButton());
     await waitFor(() => expect(saved).toHaveLength(1));
     expect(saved[0].name).toBe('Tutela Juan Pérez-restaurado.pdf');
