@@ -144,4 +144,17 @@ describe('writeTextPdf (C4, R2, S4, S5, S6)', () => {
     expect(bad.map((b) => b.p), 'ADR-001: pdf-lib must load lazily from writer.js').toEqual([]);
     expect(hits.length).toBe(1);
   });
+
+  it('FIX-8: the omitted-characters toast text lives in one constant', () => {
+    const files = [];
+    const walk = (dir) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (/\.(jsx?|mjs)$/.test(e.name) && /se omitieron/.test(fs.readFileSync(p, 'utf8'))) files.push(p.split(path.sep).join('/'));
+      }
+    };
+    walk(path.resolve(__dirname, '../src'));
+    expect(files.map((p) => p.replace(/^.*\/src\//, 'src/'))).toEqual(['src/viewmodels/messages.js']);
+  });
 });

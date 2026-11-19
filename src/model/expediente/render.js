@@ -1,9 +1,11 @@
 import JSZip from 'jszip';
-import { dictionaryFileName, dictionaryJson, safeName } from '../protectedFiles.js';
+import { dictionaryFileName, dictionaryJson, safeName, UPLOAD_STEM } from '../protectedFiles.js';
 import { formatPageRanges } from './document.js';
 
 const LABEL_NOTE = 'Los datos personales se reemplazaron por etiquetas entre corchetes, como [PERSONA_N] o [EMPRESA_N]. '
   + 'Son las mismas en todas las partes: úsalas tal cual en tus respuestas, sin intentar adivinar los datos reales.';
+// La nota que llevaban las exportaciones anteriores (ejemplos con número): esos PDF siguen en los discos (FIX-6).
+const OLD_LABEL_NOTE = LABEL_NOTE.replace('[PERSONA_N] o [EMPRESA_N]', '[PERSONA_1] o [EMPRESA_2]');
 
 /**
  * Unidad con la que se ubica el texto: folios del PDF, páginas del Word (según su última paginación)
@@ -49,12 +51,15 @@ export function renderBlocks(blocks, emptyPages = [], unit = 'folio') {
   return out.join('\n\n') + '\n';
 }
 
-export function renderWhole({ name, blocks, emptyPages, selection = false, unit = 'folio' }) {
+// FIX-3: el título es neutro; el nombre del archivo puede traer el de una persona y este texto va a la IA.
+export const NEUTRAL_TITLE = 'Documento';
+
+export function renderWhole({ blocks, emptyPages, selection = false, unit = 'folio' }) {
   const u = unitOf(unit);
   const first = blocks[0]?.page ?? 0;
   const last = blocks[blocks.length - 1]?.page ?? 0;
   const head = [
-    `# ${name} (anonimizado)`,
+    `# ${NEUTRAL_TITLE} (anonimizado)`,
     `${selection ? 'Pasajes seleccionados del expediente' : 'Expediente completo'} · ${range(u, first, last)}`,
     notes(u)
   ];
@@ -96,10 +101,12 @@ const HEAD_LINES = [
   `(?:Expediente\\s+completo|Pasajes\\s+seleccionados\\s+del\\s+expediente)\\s+·\\s+${RANGE}`,
   `\\[Instrucción\\s+para\\s+la\\s+IA\\][\\s\\S]{0,400}?espera\\s+(?:la\\s+siguiente|mi\\s+pregunta)\\.`,
   loose(LABEL_NOTE),
+  loose(OLD_LABEL_NOTE),
   ...Object.values(UNITS).map((u) => u.note).filter(Boolean).map(loose),
   `(?:El\\s+primer\\s+párrafo\\s+repite|Los\\s+primeros\\s+\\d+\\s+párrafos\\s+repiten)\\s+el\\s+final\\s+de\\s+la\\s+parte\\s+anterior,\\s+solo\\s+como\\s+contexto\\.`
 ].map((p) => new RegExp(`^\\s*${p}\\s*`));
-const TITLE = /^\s*(?:#\s+)?([^\n[\]]{1,300}?)\s+\(anonimizado\)\s*/;
+// El título puede partirse en varios renglones (nombres largos) y llevar corchetes, pero nunca cruza una línea en blanco.
+const TITLE = /^\s*(?:#\s+)?((?:[^\n]|\n(?![ \t]*\n)){1,300}?)\s+\(anonimizado\)\s*/;
 const PART = new RegExp(`^\\s*Parte\\s+\\d+\\s+de\\s+\\d+\\s+·\\s+${RANGE}\\s*`);
 
 /**
@@ -140,12 +147,15 @@ export function stripPageMarkers(text) {
 
 const pad = (n, total) => String(n).padStart(String(total).length, '0');
 
-export function partFileName(name, number, total, ext = 'md') {
-  return `${safeName(name)}_parte-${pad(number, total)}-de-${total}.${ext}`;
+export function partFileName(code, number, total, ext = 'md') {
+  return `${UPLOAD_STEM}-${code}_parte-${pad(number, total)}-de-${total}.${ext}`;
 }
 
-const README = (name, total, pdf = false) => `${name}: documento protegido en ${total} partes
+const README = (name, code, total, pdf = false) => `${name}: documento protegido en ${total} partes
 ${'='.repeat(40)}
+
+Las partes se llaman «${UPLOAD_STEM}-${code}_parte-…» para que la IA no vea el nombre del archivo.
+El código ${code} es el mismo del diccionario: así sabe qué diccionario va con qué partes.
 
 Este archivo comprimido trae dos carpetas:
 
@@ -165,7 +175,7 @@ Todo se hizo en su computador: el documento no se envió a ningún servidor.
 `;
 
 /** Expediente en partes: un solo .zip con las partes para la IA, el diccionario aparte y LEAME.txt. */
-export async function buildPartsZip({ name, parts, dictionary, type = 'blob', pdf = false, onDropped }) {
+export async function buildPartsZip({ name, code, parts, dictionary, type = 'blob', pdf = false, onDropped }) {
   const zip = new JSZip();
   const total = parts.length;
   const folder = zip.folder('para-subir-a-la-IA');
@@ -175,12 +185,12 @@ export async function buildPartsZip({ name, parts, dictionary, type = 'blob', pd
     if (writer) {
       const out = await writer.writeTextPdf({ lines: p.text.split('\n') });
       dropped.push(...out.dropped);
-      folder.file(partFileName(name, p.number, total, 'pdf'), out.bytes);
+      folder.file(partFileName(code, p.number, total, 'pdf'), out.bytes);
     }
-    folder.file(partFileName(name, p.number, total), p.text);
+    folder.file(partFileName(code, p.number, total), p.text);
   }
   if (dropped.length) onDropped?.(dropped);
-  zip.folder('NO-SUBIR').file(dictionaryFileName(name), dictionaryJson(dictionary));
-  zip.file('LEAME.txt', README(safeName(name), total, pdf));
+  zip.folder('NO-SUBIR').file(dictionaryFileName(name, code), dictionaryJson(dictionary));
+  zip.file('LEAME.txt', README(safeName(name), code, total, pdf));
   return zip.generateAsync({ type, compression: 'DEFLATE', compressionOptions: { level: 6 } });
 }

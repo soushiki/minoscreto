@@ -49,6 +49,16 @@ describe('rejoinTags (C5, R5)', () => {
     expect(rejoinTags(input, dict)).toEqual({ text: input, joined: 0, broken: [] });
   });
 
+  // FIX-7 (6-test 2026-11-18): un «[» suelto al final del renglón no es una etiqueta rota.
+  it.each([
+    ['bare [ at the end of the text', 'el rango [', []],
+    ['bare [ then ordinary text', 'Ver el anexo [\nque sigue] aquí', []],
+    ['bare [ then a lowercase line', 'valores [\n1, 2]', []],
+    ['bare [ then a tag-like piece not in the dictionary', 'a [\nPERSONA_9] b', ['[PERSONA_9]']]
+  ])('only tag-like fragments are reported: %s', (_, input, broken) => {
+    expect(rejoinTags(input, dict)).toEqual({ text: input, joined: 0, broken });
+  });
+
   it('handles empty input and an empty dictionary', () => {
     expect(rejoinTags('', {})).toEqual({ text: '', joined: 0, broken: [] });
     expect(rejoinTags('a [PERSONA_\n1] b', undefined).joined).toBe(0);

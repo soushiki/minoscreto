@@ -27,6 +27,12 @@
   .pw-actions .btn { flex: 1; }
   .pw-field input { font-size: 16px; }
 }
+/* Tableta (FIX-9): un poco más ancho y letra de 16 px en el campo, que Safari de iPad no acerca la página al escribir. */
+@media (min-width: 601px) and (max-width: 1024px) {
+  .pw-dialog { width: min(440px, calc(100vw - 48px)); }
+  .pw-form { padding: 20px; }
+  .pw-field input { font-size: 16px; }
+}
 @media (max-width: 600px), (pointer: coarse) {
   .pw-actions .btn, .pw-field input, .pw-toggle { min-height: 44px; }
 }

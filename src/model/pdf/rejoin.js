@@ -10,6 +10,8 @@ const LEADING_CLOSE = /^\s*([^[\]]{0,59})\]/;
 const TAG_LIKE = /^[A-ZÁÉÍÓÚÑ0-9_ -]*$/;
 
 const isKey = (dict, candidate) => Object.hasOwn(dict, candidate);
+// Solo se informa como rota lo que parece etiqueta: letras mayúsculas, «_», dígitos. Un «[» suelto no (FIX-7).
+const looksLikeTag = (inner) => /[A-ZÁÉÍÓÚÑ]/.test(inner) && TAG_LIKE.test(inner);
 
 // Candidatas, de la más literal a la más permisiva: espacios colapsados, sin espacios, sin el guion de corte.
 function candidates(raw) {
@@ -39,13 +41,14 @@ function joinAcrossLines(lines, i, dict, state) {
   const frag = `[${open[1].replace(/\s+$/, '')}`;
   const close = i + 1 < lines.length ? LEADING_CLOSE.exec(lines[i + 1]) : null;
   if (!close) {
-    state.broken.add(frag);
+    if (looksLikeTag(open[1].trim())) state.broken.add(frag);
     return false;
   }
   const joinedRaw = `${frag}${close[1]}]`;
   const key = candidates(joinedRaw).find((c) => isKey(dict, c));
   if (!key) {
-    state.broken.add(`${frag.replace(/-$/, '')}${close[1].trim()}]`);
+    const piece = `${frag.replace(/-$/, '')}${close[1].trim()}]`;
+    if (looksLikeTag(piece.slice(1, -1))) state.broken.add(piece);
     return false;
   }
   lines[i] = lines[i].slice(0, open.index) + key + lines[i + 1].slice(close[0].length);

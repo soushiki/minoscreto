@@ -4,8 +4,34 @@ import { dictionaryWithVariants, parseDictionary } from './dictionary.js';
 
 export const safeName = (name) => String(name || '').replace(/[\\/:*?"<>|]+/g, '-').trim() || 'documento';
 
-export const protectedFileName = (name, ext) => `${safeName(name)}_protegido.${ext}`;
-export const dictionaryFileName = (name) => `${safeName(name)}_diccionario.json`;
+// Sin 0/O ni 1/I/L: el código se lee y se compara a ojo entre el archivo para la IA y su diccionario.
+const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+
+/** Código corto al azar, uno por exportación: empareja los archivos para la IA (nombre neutro) con su diccionario. */
+export function exportCode() {
+  const bytes = crypto.getRandomValues(new Uint8Array(4));
+  return Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
+}
+
+// FIX-10: lo que se sube a la IA lleva un nombre neutro; el nombre real solo queda en lo que se guarda en casa.
+export const UPLOAD_STEM = 'documento';
+export const protectedFileName = (code, ext) => `${UPLOAD_STEM}-${code}_protegido.${ext}`;
+export const dictionaryFileName = (name, code) => `${safeName(name)}_diccionario-${code}.json`;
+export const bundleFileName = (name, code) => `${safeName(name)}-${code}.zip`;
+
+const OUR_DICTIONARY = /^(.+?)_diccionario(?:-[A-Z0-9]{4})?(?: ?\(\d+\))?\.(?:json|txt)$/i;
+// El .zip del expediente en partes (bundleFileName): solo con un código de nuestro alfabeto, para no tomar «respaldo-2024.zip».
+const OUR_BUNDLE = new RegExp(`^(.+)-[${CODE_ALPHABET}]{4}(?: ?\\(\\d+\\))?\\.zip$`, 'i');
+
+/**
+ * Nombre real del documento según el diccionario cargado («Caso_diccionario-7F3K.json» o el .zip «Caso-7F3K.zip»
+ * → «Caso»), o null si el nombre no es de los que escribimos.
+ */
+export function nameFromDictionary(dictionaryName) {
+  const name = String(dictionaryName || '');
+  const m = OUR_DICTIONARY.exec(name) || OUR_BUNDLE.exec(name);
+  return m ? m[1] : null;
+}
 
 export const dictionaryJson = (dictionary) => JSON.stringify(dictionaryWithVariants(dictionary), null, 2);
 

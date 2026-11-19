@@ -1,5 +1,8 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useReducer, useRef } from 'react';
-import { buildDictionary, dictionaryFileName, dictionaryJson, DocxError, protectedFileName, renameLabel } from '../model/index.js';
+import {
+  buildDictionary, bundleFileName, dictionaryFileName, dictionaryJson, DocxError, exportCode, protectedFileName, renameLabel
+} from '../model/index.js';
+import { OMITTED_CHARS } from './messages.js';
 import {
   buildPartsZip, buildSearchIndex, estimateTokens, formatPageRanges, renderParts, renderWhole, searchIndex, splitParts, unitOf
 } from '../model/expediente/index.js';
@@ -57,10 +60,10 @@ export function useExpediente({ save, notify }) {
   const rendered = useMemo(() => {
     if (!blocks.length || !doc) return [];
     if (format === 'md' || parts.length <= 1) {
-      return [{ number: 1, first: blocks[0].page, last: blocks[blocks.length - 1].page, text: renderWhole({ name: state.name, blocks, emptyPages: doc.emptyPages, selection: isSelection, unit }) }];
+      return [{ number: 1, first: blocks[0].page, last: blocks[blocks.length - 1].page, text: renderWhole({ blocks, emptyPages: doc.emptyPages, selection: isSelection, unit }) }];
     }
     return renderParts({ blocks, parts, emptyPages: doc.emptyPages, selection: isSelection, unit });
-  }, [blocks, parts, format, doc, state.name, isSelection, unit]);
+  }, [blocks, parts, format, doc, isSelection, unit]);
 
   const outputTokens = rendered.reduce((n, p) => n + estimateTokens(p.text.length), 0);
 
@@ -166,21 +169,22 @@ export function useExpediente({ save, notify }) {
   const download = useCallback(async () => {
     if (!rendered.length) return;
     const t = now();
-    const dict = { name: dictionaryFileName(state.name), text: dictionaryJson(dictionary) };
+    const code = exportCode(); // uno por exportación: los archivos para la IA (nombre neutro) ↔ su diccionario
+    const dict = { name: dictionaryFileName(state.name, code), text: dictionaryJson(dictionary) };
     try {
       if (rendered.length === 1 && state.kind === 'pdf') {
         const { writeTextPdf } = await import('../model/pdf/writer.js');
         const { bytes, dropped } = await writeTextPdf({ lines: rendered[0].text.split('\n') });
-        if (dropped.length) notify('Algunos caracteres no se pueden escribir en el PDF y se omitieron. Revisa el archivo.', true);
-        await downloadPair({ name: protectedFileName(state.name, 'pdf'), blob: new Blob([bytes], { type: 'application/pdf' }) }, dict);
+        if (dropped.length) notify(OMITTED_CHARS, true);
+        await downloadPair({ name: protectedFileName(code, 'pdf'), blob: new Blob([bytes], { type: 'application/pdf' }) }, dict);
       } else if (rendered.length === 1) {
-        await downloadPair({ name: protectedFileName(state.name, 'md'), blob: new Blob([rendered[0].text], { type: 'text/markdown;charset=utf-8' }) }, dict);
+        await downloadPair({ name: protectedFileName(code, 'md'), blob: new Blob([rendered[0].text], { type: 'text/markdown;charset=utf-8' }) }, dict);
       } else {
         const blob = await buildPartsZip({
-          name: state.name, parts: rendered, dictionary, pdf: state.kind === 'pdf',
-          onDropped: () => notify('Algunos caracteres no se pueden escribir en el PDF y se omitieron. Revisa el archivo.', true)
+          name: state.name, code, parts: rendered, dictionary, pdf: state.kind === 'pdf',
+          onDropped: () => notify(OMITTED_CHARS, true)
         });
-        await downloadBundle({ name: protectedFileName(state.name, 'zip'), blob }, dict);
+        await downloadBundle({ name: bundleFileName(state.name, code), blob }, dict);
       }
       dispatch({ type: 'exported', ms: now() - t });
     } catch (error) {
