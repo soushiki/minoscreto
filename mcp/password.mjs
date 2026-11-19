@@ -10,6 +10,12 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
+# windowsHide (sin consola negra) hace que Windows oculte la PRIMERA ventana del proceso: se la lleva esta, invisible
+# y fuera de la pantalla; si no, la de la contraseña quedaba abierta pero sin verse.
+$d = New-Object System.Windows.Forms.Form
+$d.Opacity = 0; $d.ShowInTaskbar = $false; $d.StartPosition = 'Manual'
+$d.Location = New-Object System.Drawing.Point(-3000, -3000); $d.Size = New-Object System.Drawing.Size(1, 1)
+$d.Show(); $d.Close(); $d.Dispose()
 $f = New-Object System.Windows.Forms.Form
 $f.Text = 'Minoscreto: contraseña del PDF'
 $f.FormBorderStyle = 'FixedDialog'; $f.MaximizeBox = $false; $f.MinimizeBox = $false
