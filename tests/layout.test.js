@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildEntities } from '../src/model/index.js';
 import { itemsToLines, findTableHints } from '../src/model/expediente/index.js';
+import { classifyPage, SCAN_RULES } from '../src/model/layout/scan.js';
 
 // Fragmentos como los de pdf.js: texto, posición (transform[4], transform[5]), ancho y alto 10.
 const item = (str, x, y, w = str.length * 5) => ({ str, transform: [10, 0, 0, 10, x, y], width: w, height: 10, hasEOL: false });
@@ -50,5 +51,54 @@ describe('bloques de firma', () => {
   it('no toma títulos ni cargos', () => {
     expect(persons(['_______________________', 'SECRETARIA DE HACIENDA MUNICIPAL', 'C.C. 52.318.904'])).toEqual([]);
     expect(persons(['Firma', 'Representante Legal'])).toEqual([]);
+  });
+});
+
+describe('revisión de escaneos por página (R5, T6)', () => {
+  const stats = (s) => ({ visibleChars: 0, invisibleChars: 0, imageCoverage: 0, hasImages: false, ...s });
+
+  it('página de texto: texto visible y sin imagen', () => {
+    expect(classifyPage(stats({ visibleChars: 2595 }))).toBe('text');
+  });
+
+  it('escaneo: imagen de página completa y solo texto invisible (capa OCR)', () => {
+    expect(classifyPage(stats({ invisibleChars: 1800, imageCoverage: 0.98, hasImages: true }))).toBe('scan');
+  });
+
+  it('escaneo sin OCR: imagen de página completa y nada de texto', () => {
+    expect(classifyPage(stats({ imageCoverage: 1, hasImages: true }))).toBe('scan');
+  });
+
+  it('membrete: imagen de página completa con texto visible real sigue siendo texto', () => {
+    expect(classifyPage(stats({ visibleChars: 1200, imageCoverage: 1, hasImages: true }))).toBe('text');
+  });
+
+  it('pocos caracteres visibles sobre imagen completa no bastan para ser texto', () => {
+    const limit = SCAN_RULES.minVisibleChars;
+    expect(classifyPage(stats({ visibleChars: limit - 1, imageCoverage: 0.95, hasImages: true }))).toBe('scan');
+    expect(classifyPage(stats({ visibleChars: limit, imageCoverage: 0.95, hasImages: true }))).toBe('text');
+  });
+
+  it('imagen que no cubre la página (firma, sello) no hace escaneo', () => {
+    const below = SCAN_RULES.minImageCoverage - 0.01;
+    expect(classifyPage(stats({ visibleChars: 5, imageCoverage: below, hasImages: true }))).toBe('text');
+    expect(classifyPage(stats({ imageCoverage: SCAN_RULES.minImageCoverage, hasImages: true }))).toBe('scan');
+  });
+
+  it('página en blanco o con solo un número de página es texto', () => {
+    expect(classifyPage(stats({}))).toBe('text');
+    expect(classifyPage(stats({ visibleChars: 2 }))).toBe('text');
+  });
+
+  it('los umbrales están en un solo objeto congelado', () => {
+    expect(SCAN_RULES).toEqual({ minVisibleChars: 30, minImageCoverage: 0.9 });
+    expect(Object.isFrozen(SCAN_RULES)).toBe(true);
+  });
+
+  it('datos del motor inválidos fallan en vez de adivinar', () => {
+    expect(() => classifyPage(null)).toThrow(TypeError);
+    expect(() => classifyPage(stats({ visibleChars: -1 }))).toThrow(TypeError);
+    expect(() => classifyPage(stats({ imageCoverage: Number.NaN }))).toThrow(TypeError);
+    expect(() => classifyPage(stats({ visibleChars: '40' }))).toThrow(TypeError);
   });
 });
