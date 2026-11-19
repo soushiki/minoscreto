@@ -2,7 +2,7 @@
   "manifest_version": "0.2",
   "name": "minoscreto",
   "display_name": "Minoscreto",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Anonimiza documentos legales colombianos en este PC y restaura los datos reales en lo que escriba Claude.",
   "long_description": "Minoscreto lee un PDF, Word (.docx), .txt o .md de tu disco, cambia nombres, cédulas, NIT, direcciones, teléfonos, correos, cuentas, radicados y placas por etiquetas como [PERSONA_1], y guarda junto al original el texto protegido y su diccionario. A Claude solo le llega el texto con etiquetas. Al final, restaurar pone los valores reales en un Word, PDF o texto que queda en tu disco, sin mostrarlos en el chat. Todo ocurre en tu computador.",
   "author": {

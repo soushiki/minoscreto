@@ -10,7 +10,19 @@ import { unitOf } from '../src/model/expediente/render.js';
 const PRIVACY = 'Nunca abras ni leas el archivo del diccionario: tiene los datos reales. Pide al usuario rutas de archivos; '
   + 'si pega el documento original en el chat, los datos ya salieron del PC.';
 
-const server = new McpServer({ name: 'minoscreto', version: '0.1.0' });
+// Va en las instrucciones del servidor (las lee Claude al conectarse): con herramientas de archivos propias (pestaña
+// Code, Cowork, un conector de archivos), Claude abría el PDF original antes de llamar a anonimizar.
+const INSTRUCTIONS = [
+  'Minoscreto protege datos personales de documentos legales. Regla obligatoria:',
+  '1. Cuando el usuario nombre un documento (PDF, Word, .txt, .md) para anonimizar, resumir, analizar o trabajar con él, '
+    + 'llama PRIMERO a anonimizar con su ruta completa. NO abras, leas, listes ni conviertas el archivo original con ninguna '
+    + 'otra herramienta (lectura de archivos, terminal, Python, skills de PDF o Word, conectores de archivos): eso envía los datos reales.',
+  '2. Trabaja solo con el texto protegido que devuelve anonimizar (y leer_protegido si es largo). Usa las etiquetas [TIPO_n] tal cual.',
+  '3. Nunca abras el archivo …_diccionario-….json: tiene los datos reales. Para entregar algo con los datos reales, usa restaurar.',
+  '4. Si no tienes la ruta completa, pídesela al usuario; no busques el archivo explorando carpetas.'
+].join('\n');
+
+const server = new McpServer({ name: 'minoscreto', version: '0.1.1' }, { instructions: INSTRUCTIONS });
 
 const reply = (text) => ({ content: [{ type: 'text', text }] });
 const fail = (error) => ({
@@ -21,7 +33,7 @@ const run = (fn) => async (args) => { try { return reply(await fn(args)); } catc
 
 server.registerTool('anonimizar', {
   title: 'Anonimizar documento',
-  description: 'Anonimiza un PDF, Word (.docx), .txt o .md del disco de este PC con Minoscreto. Cambia nombres, cédulas, NIT, '
+  description: 'Úsala ANTES de abrir cualquier documento del usuario y en lugar de leerlo con otras herramientas. Anonimiza un PDF, Word (.docx), .txt o .md del disco de este PC con Minoscreto. Cambia nombres, cédulas, NIT, '
     + 'direcciones, teléfonos, correos, cuentas, radicados y placas por etiquetas como [PERSONA_1]. Guarda junto al original '
     + '(o en carpeta_salida) el texto protegido «documento-CODIGO_protegido.md» y el diccionario «Nombre_diccionario-CODIGO.json», '
     + 'y devuelve el texto protegido para trabajar con él. Si es largo, devuelve el primer trozo: pide el resto con leer_protegido. '

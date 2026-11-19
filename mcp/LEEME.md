@@ -16,6 +16,8 @@ Funciona en **Claude Desktop** (Windows o Mac). No funciona en claude.ai desde e
 
 ## Usar
 
+> **Advertencia:** usa la pestaña **Chat** de Claude Desktop, sin otros conectores de archivos activos. En las pestañas Code o Cowork, Claude tiene sus propias herramientas para abrir archivos: el conector le pide no usarlas con tus documentos, pero no puede impedirlo. Si ves que Claude «lee» o «explora» el archivo antes de anonimizarlo, detenlo.
+
 1. En un chat nuevo, escribe la ruta completa del archivo:
 
    ```text
