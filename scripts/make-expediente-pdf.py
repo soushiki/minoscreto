@@ -64,6 +64,66 @@ td{border:1px solid #888;padding:2px;word-break:break-all;width:28mm}</style></h
 </main></body></html>'''
 
 
+# PDF "sucio" para la limpieza (S7): cada parte que debe desaparecer lleva un valor sembrado, y el archivo
+# tiene flujos de objetos y una revisión anterior (guardado incremental).
+DIRTY_VALUE = 'Laura Patricia Ortega Jiménez'
+
+
+def _dirty_pdf(path):
+    tmp = path + '.tmp'
+    doc = pymupdf.open()
+    for n in range(2):
+        page = doc.new_page(width=612, height=792)
+        page.insert_text((72, 72), f'Folio {n + 1}: texto visible del expediente.', fontsize=11, fontname='helv')
+    page = doc[0]
+    doc.set_metadata({'title': DIRTY_VALUE, 'author': DIRTY_VALUE, 'subject': DIRTY_VALUE,
+                      'producer': 'Minoscreto fixtures', 'creator': 'Minoscreto fixtures'})
+    doc.set_xml_metadata(f'<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/'
+                         f'22-rdf-syntax-ns#"><rdf:Description>{DIRTY_VALUE}</rdf:Description></rdf:RDF></x:xmpmeta>')
+    note = page.add_text_annot((300, 72), DIRTY_VALUE)
+    note.set_info(title=DIRTY_VALUE)
+    note.update()
+    page.add_freetext_annot(pymupdf.Rect(72, 300, 300, 330), DIRTY_VALUE, fontsize=10)
+    field = pymupdf.Widget()
+    field.field_type = pymupdf.PDF_WIDGET_TYPE_TEXT
+    field.field_name = 'demandante'
+    field.field_value = DIRTY_VALUE
+    field.rect = pymupdf.Rect(72, 400, 300, 420)
+    page.add_widget(field)
+    doc.set_toc([[1, DIRTY_VALUE, 1], [1, 'Folio 2', 2]])
+    doc.embfile_add('datos.txt', DIRTY_VALUE.encode('utf-8'), filename='datos.txt', desc=DIRTY_VALUE)
+    cat = doc.pdf_catalog()
+    js = doc.get_new_xref()
+    doc.update_object(js, f'<< /S /JavaScript /JS ({DIRTY_VALUE}) >>')
+    names = doc.xref_get_key(cat, 'Names')
+    names_xref = int(names[1].split()[0]) if names[0] == 'xref' else None
+    js_names = f'<< /Names [(saludo) {js} 0 R] >>'
+    if names_xref:
+        doc.xref_set_key(names_xref, 'JavaScript', js_names)
+    elif names[0] == 'dict':
+        doc.xref_set_key(cat, 'Names', names[1].rstrip()[:-2] + f' /JavaScript {js_names} >>')
+    else:
+        doc.xref_set_key(cat, 'Names', f'<< /JavaScript {js_names} >>')
+    doc.xref_set_key(cat, 'OpenAction', f'{js} 0 R')
+    doc.xref_set_key(cat, 'AA', f'<< /WC {js} 0 R >>')
+    doc.xref_set_key(cat, 'MarkInfo', '<< /Marked true >>')
+    doc.xref_set_key(cat, 'StructTreeRoot', f'<< /Type /StructTreeRoot /K << /S /P /Alt ({DIRTY_VALUE}) >> >>')
+    doc.xref_set_key(cat, 'PieceInfo', f'<< /Minoscreto << /Private ({DIRTY_VALUE}) >> >>')
+    doc.xref_set_key(page.xref, 'AA', f'<< /O {js} 0 R >>')
+    doc.xref_set_key(page.xref, 'PieceInfo', f'<< /Minoscreto << /Private ({DIRTY_VALUE}) >> >>')
+    doc.save(tmp, garbage=1, deflate=True, use_objstms=1)
+    doc.close()
+    # Revisión posterior: la nota cambia de texto; la versión vieja queda en la revisión anterior.
+    doc = pymupdf.open(tmp)
+    first = doc[0]
+    annot = first.first_annot
+    annot.set_info(content='Nota cambiada')
+    annot.update()
+    doc.save(tmp, incremental=True, encryption=pymupdf.PDF_ENCRYPT_KEEP)
+    doc.close()
+    os.replace(tmp, path)
+
+
 def _chrome():
     for p in (r'C:\Program Files\Google\Chrome\Application\chrome.exe',
               r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe', shutil.which('chrome')):
@@ -81,6 +141,7 @@ def make_fixtures():
     _text_pdf(FIXTURE_LINES, out('solo_propietario_sintetico.pdf'), encryption=pymupdf.PDF_ENCRYPT_AES_256,
               user_pw='', owner_pw=OWNER_PASSWORD, permissions=pymupdf.PDF_PERM_ACCESSIBILITY)
     _text_pdf(SPLIT_LINES, out('etiquetas_fin_de_linea_sintetico.pdf'))
+    _dirty_pdf(out('sucio_sintetico.pdf'))
     with open(out('etiquetas_fin_de_linea_sintetico.json'), 'w', encoding='utf-8') as f:
         json.dump({'keys': SPLIT_KEYS}, f, ensure_ascii=False, indent=2)
     with tempfile.TemporaryDirectory() as tmp:

@@ -126,7 +126,7 @@ describe('writeTextPdf (C4, R2, S4, S5, S6)', () => {
     expect(ms).toBeLessThanOrEqual(2000);
   }, 30000);
 
-  it('ADR-001: pdf-lib must load lazily from writer.js', () => {
+  it('ADR-001: pdf-lib must load lazily from src/model/pdf/', () => {
     const hits = [];
     const walk = (dir) => {
       for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -139,10 +139,12 @@ describe('writeTextPdf (C4, R2, S4, S5, S6)', () => {
       }
     };
     walk(path.resolve(__dirname, '../src'));
-    const bad = hits.filter(({ p, src }) => !p.endsWith('src/model/pdf/writer.js')
+    // ADR-001 (enmendado 2026-11-19): solo archivos de src/model/pdf/ y solo con import() dinámico.
+    const bad = hits.filter(({ p, src }) => !/src\/model\/pdf\/[^/]+\.js$/.test(p)
       || /^\s*import[^(]*from\s+['"]pdf-lib['"]/m.test(src) || !src.includes("import('pdf-lib')"));
-    expect(bad.map((b) => b.p), 'ADR-001: pdf-lib must load lazily from writer.js').toEqual([]);
-    expect(hits.length).toBe(1);
+    expect(bad.map((b) => b.p), 'ADR-001: pdf-lib must load lazily from src/model/pdf/').toEqual([]);
+    expect(hits.map((h) => h.p.replace(/.*src\//, 'src/')).sort())
+      .toEqual(['src/model/pdf/scrub.js', 'src/model/pdf/writer.js']);
   });
 
   it('FIX-8: the omitted-characters toast text lives in one constant', () => {
