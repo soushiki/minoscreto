@@ -14,6 +14,8 @@
     "eval": "node scripts/eval.mjs"
   },
   "dependencies": {
+    "@embedpdf/engine-runtime": "3.3.0",
+    "@embedpdf/engine-runtime-wasm32": "3.3.0",
     "jszip": "^3.10.2",
     "pdf-lib": "1.17.1",
     "pdfjs-dist": "^6.4.299",
