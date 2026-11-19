@@ -1,0 +1,23 @@
+{
+  "name": "minoscreto-mcp",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Conector local de Minoscreto para Claude Desktop: anonimiza y restaura archivos en este PC.",
+  "type": "module",
+  "main": "server.mjs",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "pack": "node pack.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@xmldom/xmldom": "0.9.12",
+    "jszip": "3.10.2",
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "6.5.438",
+    "zod": "4.6.7"
+  }
+}

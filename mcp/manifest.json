@@ -1,0 +1,30 @@
+{
+  "manifest_version": "0.2",
+  "name": "minoscreto",
+  "display_name": "Minoscreto",
+  "version": "0.1.0",
+  "description": "Anonimiza documentos legales colombianos en este PC y restaura los datos reales en lo que escriba Claude.",
+  "long_description": "Minoscreto lee un PDF, Word (.docx), .txt o .md de tu disco, cambia nombres, cédulas, NIT, direcciones, teléfonos, correos, cuentas, radicados y placas por etiquetas como [PERSONA_1], y guarda junto al original el texto protegido y su diccionario. A Claude solo le llega el texto con etiquetas. Al final, restaurar pone los valores reales en un Word, PDF o texto que queda en tu disco, sin mostrarlos en el chat. Todo ocurre en tu computador.",
+  "author": {
+    "name": "Minoscreto"
+  },
+  "homepage": "https://minoscreto.netlify.app",
+  "server": {
+    "type": "node",
+    "entry_point": "mcp/server.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/mcp/server.mjs"],
+      "env": {}
+    }
+  },
+  "tools": [
+    { "name": "anonimizar", "description": "Anonimiza un archivo del disco y devuelve el texto con etiquetas." },
+    { "name": "leer_protegido", "description": "Lee el resto de un texto protegido largo." },
+    { "name": "restaurar", "description": "Pone los datos reales en un texto o archivo con etiquetas y lo guarda en el disco." }
+  ],
+  "compatibility": {
+    "platforms": ["win32", "darwin"],
+    "runtimes": { "node": ">=20.19.0" }
+  }
+}
