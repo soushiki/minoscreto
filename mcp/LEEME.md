@@ -14,9 +14,38 @@ Funciona en **Claude Desktop** (Windows o Mac). No funciona en claude.ai desde e
 
 4. Verifica que **Minoscreto** quede activado.
 
+## Usarlo también en la pestaña Code (10 minutos, fácil)
+
+Las extensiones de **Configuración → Extensiones** solo se cargan en la pestaña **Chat**. Para tener Minoscreto en la pestaña **Code**, regístralo una vez en Claude Code:
+
+1. Guarda `minoscreto.mcpb` en una carpeta fija, por ejemplo `Documentos`.
+2. Abre una sesión nueva en la pestaña **Code**.
+3. Pega este mensaje y cambia `RUTA_DEL_MCPB` por la ruta completa del archivo:
+
+   ```text
+   Configura el conector Minoscreto en Claude Code. No abras ningún documento mío.
+   1. Revisa node --version. Si falta o es menor que 20.19, instálalo con winget install OpenJS.NodeJS.LTS.
+   2. Crea la carpeta %USERPROFILE%\Minoscreto y descomprime ahí el archivo con: tar -xf "RUTA_DEL_MCPB" -C "%USERPROFILE%\Minoscreto"
+   3. Regístralo para todos mis proyectos: claude mcp add minoscreto --scope user -- node "%USERPROFILE%\Minoscreto\mcp\server.mjs"
+      Si el comando claude no existe, agrega en %USERPROFILE%\.claude.json, dentro de "mcpServers" del nivel superior:
+      "minoscreto": {"type": "stdio", "command": "node", "args": ["<ruta completa de server.mjs>"]}
+   4. Ejecuta claude mcp get minoscreto y dime si dice Connected.
+   5. Agrega esta regla a %USERPROFILE%\.claude\CLAUDE.md (créalo si no existe), sin borrar lo que ya tenga:
+      "Documentos con datos personales (expedientes, contratos, poderes, documentos de clientes): para anonimizarlos o
+      trabajar con ellos usa solo la herramienta anonimizar de Minoscreto. Nunca abras el original con lectura de archivos,
+      terminal, Python ni skills de PDF o Word. Si las herramientas de Minoscreto no están cargadas, detente y avísame:
+      no anonimices con un script propio."
+   ```
+
+4. Cuando Claude diga **Connected**, cierra esa sesión y abre una nueva. Las herramientas se cargan al iniciar una sesión.
+
+> **Nota:** para documentos sin datos personales, la pestaña Code funciona como siempre. La regla solo aplica cuando el documento tiene datos personales.
+
+> **Nota:** al recibir una versión nueva de `minoscreto.mcpb`, repite el paso 2 del mensaje en la misma carpeta y abre una sesión nueva.
+
 ## Usar
 
-> **Advertencia:** usa la pestaña **Chat** de Claude Desktop, sin otros conectores de archivos activos. En las pestañas Code o Cowork, Claude tiene sus propias herramientas para abrir archivos: el conector le pide no usarlas con tus documentos, pero no puede impedirlo. Si ves que Claude «lee» o «explora» el archivo antes de anonimizarlo, detenlo.
+> **Advertencia:** la pestaña **Chat** es la más segura, siempre que no tengas otros conectores de archivos activos: ahí Claude no tiene cómo abrir el archivo por su cuenta. En la pestaña Code, Claude tiene sus propias herramientas para abrir archivos. El conector y la regla de `CLAUDE.md` le piden no usarlas con tus documentos, pero no pueden impedirlo. Si ves que Claude «lee» o «explora» el archivo antes de llamar a anonimizar, detenlo.
 
 1. En un chat nuevo, escribe la ruta completa del archivo:
 
