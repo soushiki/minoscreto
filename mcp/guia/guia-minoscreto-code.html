@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minoscreto en Claude Code</title>
+<style>
+  :root { --text: #1d1d1f; --muted: #555; --line: #d9d9de; --box: #f4f4f7; --danger: #a8071a; --danger-bg: #fff1f0;
+          --warn: #8a4b00; --warn-bg: #fff7e6; --note: #0b4f9c; --note-bg: #eef5ff; }
+  @page { size: A4; margin: 18mm 17mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0 auto; max-width: 760px; padding: 24px 16px; font: 11.5pt/1.5 "Segoe UI", Arial, sans-serif; color: var(--text); background: #fff; }
+  h1 { font-size: 20pt; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 18px; }
+  h2 { font-size: 14pt; margin: 26px 0 8px; padding-bottom: 4px; border-bottom: 2px solid var(--line); }
+  h2 small { font-weight: normal; color: var(--muted); font-size: 10.5pt; }
+  ol { padding-left: 22px; margin: 8px 0; }
+  ol > li { margin: 6px 0; }
+  ul { padding-left: 20px; margin: 6px 0; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 10pt; background: var(--box); padding: 1px 4px; border-radius: 3px; }
+  pre { font-family: Consolas, "Courier New", monospace; font-size: 9pt; line-height: 1.45; background: var(--box); border: 1px solid var(--line);
+        border-radius: 6px; padding: 10px 12px; white-space: pre-wrap; word-break: break-word; margin: 8px 0; break-inside: avoid; }
+  .notice { border-left: 5px solid; border-radius: 4px; padding: 8px 12px; margin: 10px 0; break-inside: avoid; }
+  .notice b:first-child { display: inline; }
+  .danger { border-color: var(--danger); background: var(--danger-bg); }
+  .danger b:first-child { color: var(--danger); }
+  .warning { border-color: var(--warn); background: var(--warn-bg); }
+  .warning b:first-child { color: var(--warn); }
+  .note { border-color: var(--note); background: var(--note-bg); }
+  .note b:first-child { color: var(--note); }
+  .files { margin: 6px 0; }
+  .files td { padding: 3px 8px 3px 0; vertical-align: top; }
+  .keep { break-inside: avoid; }
+  @media (max-width: 600px) { body { font-size: 11pt; padding: 16px; } h1 { font-size: 17pt; } pre { font-size: 8.5pt; } }
+</style>
+</head>
+<body>
+
+<h1>Minoscreto en Claude Code</h1>
+<p class="sub">Guía para instalar y usar el conector que anonimiza tus documentos antes de que Claude los lea.</p>
+
+<p>Minoscreto cambia los nombres, cédulas, NIT, direcciones, teléfonos, correos, cuentas, radicados y placas de un documento por etiquetas como <code>[PERSONA_1]</code>. Todo ocurre en tu computador: Claude solo recibe el texto con etiquetas. Al final, Minoscreto vuelve a poner los datos reales en el resultado y lo guarda en tu computador.</p>
+
+<p><b>Necesitas:</b> Claude Desktop con la pestaña <b>Code</b> y el archivo <code>minoscreto.mcpb</code> que vino con esta guía.</p>
+
+<h2>1. Instalar <small>(una sola vez · unos 10 minutos)</small></h2>
+<ol>
+  <li>Guarda el archivo <code>minoscreto.mcpb</code> en tu carpeta <b>Documentos</b>.</li>
+  <li>Abre Claude Desktop y entra a la pestaña <b>Code</b>.</li>
+  <li>Inicia una sesión nueva.</li>
+  <li>Abre el archivo <code>instalar-minoscreto.txt</code> que vino con esta guía, presiona <b>Ctrl+A</b> y luego <b>Ctrl+C</b>. Es el mismo mensaje del recuadro de abajo.</li>
+  <li>Pega el mensaje en la sesión con <b>Ctrl+V</b> y envíalo.</li>
+</ol>
+<pre>Configura el conector Minoscreto en Claude Code. No abras ningún documento mío.
+1. Busca el archivo minoscreto.mcpb en mis carpetas Documentos, Descargas y Escritorio. Abre solo ese archivo.
+2. Revisa si Node.js 20.19 o más nuevo está instalado. Si no, instálalo con: winget install OpenJS.NodeJS.LTS
+3. Crea la carpeta %USERPROFILE%\Minoscreto y descomprime ahí el archivo con: tar -xf "&lt;ruta del .mcpb&gt;" -C "%USERPROFILE%\Minoscreto"
+4. Regístralo para todos mis proyectos, con la ruta completa de node.exe:
+   claude mcp add minoscreto --scope user -- "&lt;ruta de node.exe&gt;" "%USERPROFILE%\Minoscreto\mcp\server.mjs"
+   Si el comando claude no existe, agrega en %USERPROFILE%\.claude.json, dentro de "mcpServers" del nivel superior:
+   "minoscreto": {"type": "stdio", "command": "&lt;ruta de node.exe&gt;", "args": ["&lt;ruta completa de server.mjs&gt;"]}
+5. Ejecuta claude mcp get minoscreto y dime si dice Connected.
+6. Agrega esta regla a %USERPROFILE%\.claude\CLAUDE.md (créalo si no existe), sin borrar lo que ya tenga:
+   "Documentos con datos personales (expedientes, contratos, poderes, documentos de clientes): para anonimizarlos o trabajar con ellos usa solo la herramienta anonimizar de Minoscreto. Nunca abras el original con lectura de archivos, terminal, Python ni skills de PDF o Word. Si las herramientas de Minoscreto no están cargadas, detente y avísame: no anonimices con un script propio."</pre>
+<ol start="6">
+  <li>Cada vez que Claude pida permiso para ejecutar un comando, haz clic en <b>Permitir</b> (<i>Allow</i>).</li>
+  <li>Si Windows pregunta si quieres permitir que la aplicación haga cambios, haz clic en <b>Sí</b>. Esto pasa solo si hay que instalar Node.js.</li>
+  <li>Espera a que Claude te diga que Minoscreto quedó <b>Connected</b>.</li>
+  <li>Cierra esa sesión y abre una nueva. Las herramientas de Minoscreto se cargan al iniciar cada sesión.</li>
+</ol>
+
+<h2>2. Anonimizar un documento <small>(1–3 minutos)</small></h2>
+<div class="notice danger"><b>Peligro:</b> no arrastres ni adjuntes el documento a la sesión, y no pegues su texto. Así los datos reales le llegan a Claude. Dale solo la ruta del archivo.</div>
+<ol>
+  <li>En el Explorador de archivos, haz clic derecho sobre el documento (PDF, Word, .txt o .md) y elige <b>Copiar como ruta de acceso</b>.</li>
+  <li>En una sesión nueva de la pestaña Code, escribe <code>Anonimiza</code>, pega la ruta y di qué necesitas. Ejemplo:
+    <pre>Anonimiza "C:\Users\Ana\Documents\Caso Pérez.pdf" y hazme un resumen del caso.</pre></li>
+</ol>
+<div class="notice warning"><b>Advertencia:</b> si Claude empieza a leer el archivo, a explorar la carpeta o a escribir un programa propio, en lugar de usar <b>anonimizar</b> de Minoscreto, detenlo con el botón de detener (■) o con la tecla Esc.</div>
+<ol start="3">
+  <li>Revisa que lo primero que haga Claude sea usar <b>anonimizar</b> de Minoscreto.</li>
+  <li>Revisa el resumen de datos ocultos que muestra Claude (cuántas personas, cédulas, etc.).</li>
+</ol>
+<p>Junto al documento original aparecen dos archivos nuevos:</p>
+<table class="files">
+  <tr><td><code>documento-XXXX_protegido.md</code></td><td>El texto con etiquetas. Este sí se puede compartir.</td></tr>
+  <tr><td><code>Caso Pérez_diccionario-XXXX.json</code></td><td>Los datos reales. No lo compartas ni se lo pidas a Claude.</td></tr>
+</table>
+
+<h2>3. Corregir lo que se ocultó <small>(1 minuto)</small></h2>
+<ol>
+  <li>Si algo no debía ocultarse, díselo con su etiqueta. Ejemplo: <code>No ocultes [PERSONA_3], es el juez.</code></li>
+  <li>Si algo quedó visible y debía ocultarse, díselo. Ejemplo: <code>Oculta también "Finca La Esperanza".</code></li>
+</ol>
+<p>Claude anonimiza de nuevo y crea archivos con un código nuevo.</p>
+
+<h2>4. Recibir el resultado con los datos reales <small>(1 minuto)</small></h2>
+<ol>
+  <li>Pídele a Claude que restaure su respuesta. Ejemplo: <code>Restaura tu respuesta en un Word.</code></li>
+  <li>Abre el archivo <code>Caso Pérez-restaurado.docx</code> que aparece en la misma carpeta. Claude te dice la ruta; los datos reales no aparecen en el chat.</li>
+</ol>
+<div class="notice note"><b>Nota:</b> también puedes restaurar un archivo que te devolvió otra IA. Ejemplo: <code>Restaura "C:\...\respuesta.docx" con el diccionario "C:\...\Caso Pérez_diccionario-XXXX.json".</code></div>
+
+<h2 class="keep">5. Bueno saber</h2>
+<ul>
+  <li>Para documentos <b>sin</b> datos personales, la pestaña Code funciona como siempre.</li>
+  <li>Un PDF con contraseña no se abre: quítale la contraseña o usa <a href="https://minoscreto.netlify.app">minoscreto.netlify.app</a>.</li>
+  <li>Un PDF escaneado sin texto no se puede leer: hazle OCR primero.</li>
+  <li>El PDF restaurado es de texto simple, sin el diseño original. Para conservar el formato, pide Word.</li>
+  <li>Ningún archivo se sobrescribe: si el nombre ya existe, se crea uno con <code>(2)</code>.</li>
+  <li>Si recibes una versión nueva de <code>minoscreto.mcpb</code>, repite la parte 1 con el archivo nuevo.</li>
+  <li>Si algo falla, anota en qué paso ibas y qué dijo Claude, y avísale a quien te envió esta guía.</li>
+</ul>
+
+</body>
+</html>

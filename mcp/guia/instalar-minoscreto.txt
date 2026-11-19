@@ -1,0 +1,11 @@
+Configura el conector Minoscreto en Claude Code. No abras ningún documento mío.
+1. Busca el archivo minoscreto.mcpb en mis carpetas Documentos, Descargas y Escritorio. Abre solo ese archivo.
+2. Revisa si Node.js 20.19 o más nuevo está instalado. Si no, instálalo con: winget install OpenJS.NodeJS.LTS
+3. Crea la carpeta %USERPROFILE%\Minoscreto y descomprime ahí el archivo con: tar -xf "<ruta del .mcpb>" -C "%USERPROFILE%\Minoscreto"
+4. Regístralo para todos mis proyectos, con la ruta completa de node.exe:
+   claude mcp add minoscreto --scope user -- "<ruta de node.exe>" "%USERPROFILE%\Minoscreto\mcp\server.mjs"
+   Si el comando claude no existe, agrega en %USERPROFILE%\.claude.json, dentro de "mcpServers" del nivel superior:
+   "minoscreto": {"type": "stdio", "command": "<ruta de node.exe>", "args": ["<ruta completa de server.mjs>"]}
+5. Ejecuta claude mcp get minoscreto y dime si dice Connected.
+6. Agrega esta regla a %USERPROFILE%\.claude\CLAUDE.md (créalo si no existe), sin borrar lo que ya tenga:
+   "Documentos con datos personales (expedientes, contratos, poderes, documentos de clientes): para anonimizarlos o trabajar con ellos usa solo la herramienta anonimizar de Minoscreto. Nunca abras el original con lectura de archivos, terminal, Python ni skills de PDF o Word. Si las herramientas de Minoscreto no están cargadas, detente y avísame: no anonimices con un script propio."

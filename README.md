@@ -37,5 +37,8 @@ Pestaña **Expediente**. Lee la capa de texto de un PDF ya pasado por OCR (por e
 ## Descargas
 Un solo botón «Descargar»: baja el documento protegido con un nombre neutro (`documento-7F3K_protegido.docx`, `.md` o `.pdf`, para que la IA no vea el nombre del archivo) y, medio segundo después, su diccionario con el nombre real y el mismo código (`<nombre>_diccionario-7F3K.json`), para que no se pueda olvidar. Queda a la vista una lista con ambos y «Descargar diccionario de nuevo» por si el navegador bloqueó la segunda descarga. Un expediente en varias partes baja como un solo `<nombre>-7F3K.zip` (partes `documento-7F3K_parte-…`, diccionario y `LEAME.txt`). El código de 4 caracteres cambia en cada exportación. Al restaurar, el archivo se guarda como `<nombre>-restaurado`, con el nombre tomado del diccionario. «Copiar texto para la IA» (o «Copiar parte X de N») copia el texto protegido sin descomprimir nada. Restaurar acepta el diccionario o ese .zip.
 
+## Conector para Claude (MCP local)
+`mcp/` expone el mismo `src/model` como servidor MCP por stdio, con las herramientas `anonimizar`, `leer_protegido` y `restaurar`: lee y escribe en el disco del usuario y solo devuelve etiquetas, conteos y rutas. Pruebas: `tests/mcp.test.js` (en Node, dentro de `npm test`). Empaquetar: en `mcp/`, `npm install` y luego `npm run pack` → `mcp/build/minoscreto.mcpb`. Guía para quien lo usa en la pestaña Code de Claude Desktop: `mcp/guia/` (HTML para imprimir a PDF y el mensaje de instalación en `.txt`).
+
 ## Licencias de terceros
 El motor PDF que conserva el diseño es PDFium a través de [`@embedpdf/engine-runtime`](https://github.com/embedpdf/embed-pdf-viewer) y `@embedpdf/engine-runtime-wasm32` (3.3.0, Apache-2.0), y solo se carga cuando hace falta.
