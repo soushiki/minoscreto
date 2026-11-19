@@ -15,3 +15,11 @@
     X-Frame-Options = "DENY"
     Permissions-Policy = "camera=(), microphone=(), geolocation=()"
     Strict-Transport-Security = "max-age=31536000"
+
+# Motor PDFium (ADR-004): el nombre lleva el hash del contenido, así que nunca cambia y se guarda en caché para
+# siempre. Netlify ya sirve .wasm como application/wasm; no se fija Content-Type aquí porque la regla cubre
+# también worker.<hash>.js. La página descarga ambos con fetch y comprueba su SHA-256 antes de usarlos.
+[[headers]]
+  for = "/engine/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
