@@ -2,10 +2,11 @@
 // dist/engine/worker.<hash>.js; la página nunca lo importa. Protocolo:
 //   página → { type: 'init', wasmBinary }                  worker → { type: 'ready' } | { type: 'error', message }
 //   página → { type: 'call', id, method, args }            worker → { type: 'result', id, ok, result | error }
+//   métodos: open(bytes, password) · pageStats(p) · editPage(p, { mode, needles }) · save() → Uint8Array · close()
 import { createPdfRuntime } from '@embedpdf/engine-runtime';
 import { createPdfium } from './pdfium.js';
 
-const METHODS = new Set(['open', 'pageStats', 'close']);
+const METHODS = new Set(['open', 'pageStats', 'editPage', 'save', 'close']);
 
 export function createWorkerHandler(post, startRuntime = (wasmBinary) => createPdfRuntime({ wasmBinary })) {
   let engine = null;
@@ -31,7 +32,9 @@ export function createWorkerHandler(post, startRuntime = (wasmBinary) => createP
     if (!engine) return post({ type: 'result', id, ok: false, error: { code: 'not-ready' } });
     if (!METHODS.has(method)) return post({ type: 'result', id, ok: false, error: { code: 'bad-method' } });
     try {
-      post({ type: 'result', id, ok: true, result: engine[method](...args) });
+      const result = engine[method](...args);
+      // Los bytes guardados se transfieren, no se copian (pueden ser decenas de MB).
+      post({ type: 'result', id, ok: true, result }, result instanceof Uint8Array ? [result.buffer] : []);
     } catch (error) {
       post({ type: 'result', id, ok: false, error: { code: error?.code ?? 'error', message: String(error?.message ?? error) } });
     }
@@ -39,5 +42,5 @@ export function createWorkerHandler(post, startRuntime = (wasmBinary) => createP
 }
 
 if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope) {
-  self.onmessage = createWorkerHandler((message) => self.postMessage(message));
+  self.onmessage = createWorkerHandler((message, transfer = []) => self.postMessage(message, transfer));
 }

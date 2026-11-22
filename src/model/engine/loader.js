@@ -15,6 +15,7 @@ export class EngineError extends Error {
 const READY_TIMEOUT_MS = 30_000;
 const OPEN_TIMEOUT_MS = 30_000; // abrir un archivo de hasta 80 MB
 const CALL_TIMEOUT_MS = 10_000; // por página (ADR-005)
+const SAVE_TIMEOUT_MS = 30_000; // guardar un archivo de hasta 80 MB
 const ENGINE_PATH = /^\/engine\/[\w.-]+$/; // mismo origen, solo /engine/ (S6)
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 
@@ -129,6 +130,10 @@ function createClient(worker, onDead) {
       return call('open', [copy, password], [copy.buffer], OPEN_TIMEOUT_MS);
     },
     pageStats: (pageIndex) => call('pageStats', [pageIndex]),
+    /** `needles`: [{ value, put }]; una página por llamada, con su propio tiempo límite (ADR-005). */
+    editPage: (pageIndex, { mode, needles }) => call('editPage', [pageIndex, { mode, needles }]),
+    /** Bytes del documento entero, sin cifrado. */
+    save: () => call('save', [], [], SAVE_TIMEOUT_MS),
     close: () => call('close'),
     terminate: () => kill(new EngineError('terminated')),
     get alive() {

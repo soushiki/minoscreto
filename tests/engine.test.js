@@ -133,6 +133,219 @@ describe('engine worker: PDFium wrapper', () => {
   });
 });
 
+// pdf.js real (legacy en Node): líneas por altura, en el orden del flujo dentro de cada línea, o todo el flujo crudo.
+async function pdfjsLines(bytes, { raw = false } = {}) {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const doc = await pdfjs.getDocument({ data: bytes.slice(), verbosity: 0, isEvalSupported: false }).promise;
+  const pages = [];
+  for (let n = 1; n <= doc.numPages; n++) {
+    const byY = new Map();
+    for (const item of (await (await doc.getPage(n)).getTextContent()).items) {
+      if (!item.str.trim()) continue;
+      const y = raw ? 0 : Math.round(item.transform[5]);
+      byY.set(y, `${byY.get(y) ?? ''} ${item.str}`);
+    }
+    pages.push([...byY].sort((a, b) => b[0] - a[0]).map(([, line]) => tokens(line)));
+  }
+  await doc.cleanup?.();
+  return pages;
+}
+const tokens = (line) => line.split(/\s+/).filter(Boolean).join(' ');
+const tagged = (line, pairs) => tokens(pairs.reduce((out, [tag, value]) => out.split(value).join(` ${tag} `), line));
+
+describe('engine worker: editPage protect + save (T9, ADR-008)', () => {
+  const pairs = Object.entries(JSON.parse(readFileSync(join(root, 'tests/fixtures/tabla_sintetico.json'), 'utf8')))
+    .sort((a, b) => b[1].length - a[1].length);
+  const needles = pairs.map(([put, value]) => ({ value, put }));
+
+  // Abre, protege todas las páginas, guarda y cierra; devuelve el PDF de salida. Todo puntero y página liberados.
+  function protect(name, list = needles, password = '') {
+    const counted = countingRuntime(runtime);
+    const pdfium = createPdfium(counted.runtime);
+    const { pageCount } = pdfium.open(fixture(name), password);
+    const replaced = Array.from({ length: pageCount }, (_, p) => pdfium.editPage(p, { mode: 'protect', needles: list }).replaced);
+    const out = pdfium.save();
+    pdfium.close();
+    expect(counted.live.size).toBe(0);
+    expect(counted.opened).toEqual({ page: 0, text: 0 });
+    return { out, replaced };
+  }
+
+  async function onePage(draw) {
+    const pdf = await PDFDocument.create();
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    draw(pdf.addPage([595, 842]), font);
+    return pdf.save({ useObjectStreams: false });
+  }
+
+  it.each(['tabla_sintetico.pdf', 'prosa_sintetico.pdf'])('%s: every value gone, each tag in its place, line by line and in raw stream order', async (name) => {
+    const { out, replaced } = protect(name);
+    expect(replaced.reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+    const expected = (pages) => pages.map((lines) => lines.map((line) => tagged(line, pairs)));
+    const after = await pdfjsLines(out);
+    expect(after).toEqual(expected(await pdfjsLines(fixture(name))));
+    expect(await pdfjsLines(out, { raw: true })).toEqual(expected(await pdfjsLines(fixture(name), { raw: true })));
+    const text = after.flat().join('\n');
+    for (const [, value] of pairs) expect(text).not.toContain(value);
+    // PDFium la reabre y ya no encuentra ningún valor (redacción real, no un rectángulo encima).
+    const again = createPdfium(runtime);
+    again.open(out);
+    for (let p = 0; p < replaced.length; p++) expect(again.editPage(p, { mode: 'protect', needles }).replaced).toBe(0);
+    again.close();
+  });
+
+  it('a locked PDF: opened with its password, values replaced, saved without encryption', async () => {
+    const list = [
+      { value: 'Laura Patricia Ortega Jiménez', put: '[PERSONA_1]' },
+      { value: '45.521.884', put: '[CEDULA_1]' },
+      { value: '901.234.567-8', put: '[NIT_1]' }
+    ];
+    const { out, replaced } = protect('contrasena_usuario_sintetico.pdf', list, 'minoscreto-prueba');
+    expect(replaced).toEqual([3]);
+    expect(Buffer.from(out).toString('latin1')).not.toMatch(/\/Encrypt\b/);
+    const reopened = createPdfium(runtime);
+    expect(reopened.open(out).pageCount).toBe(1); // sin contraseña
+    reopened.close();
+    const lines = (await pdfjsLines(out))[0];
+    expect(lines).toContain('Demandante: [PERSONA_1] , C.C. [CEDULA_1]');
+    expect(lines.some((line) => line.includes('NIT [NIT_1]'))).toBe(true);
+    expect(lines.join('\n')).not.toMatch(/Laura Patricia|45\.521\.884|901\.234\.567-8/);
+  });
+
+  it('same rules as the gate: whole words only, longest first, accents and case folded', async () => {
+    const bytes = await onePage((page, font) => {
+      page.drawText('Mariana y Ana firmaron; ANA MARIA PEREZ también.', { x: 50, y: 700, size: 12, font });
+    });
+    const pdfium = createPdfium(runtime);
+    pdfium.open(bytes);
+    expect(pdfium.editPage(0, { mode: 'protect', needles: [
+      { value: 'Ana', put: '[PERSONA_2]' },
+      { value: 'Ana María Pérez', put: '[PERSONA_1]' }
+    ] })).toEqual({ replaced: 2 });
+    const out = pdfium.save();
+    pdfium.close();
+    expect((await pdfjsLines(out))[0]).toEqual(['Mariana y [PERSONA_2] firmaron; [PERSONA_1] también.']);
+  });
+
+  it('a value split over two text objects on one line is replaced in place, the rest of the line kept', async () => {
+    const head = 'Contra Ana María ';
+    const bytes = await onePage((page, font) => {
+      page.drawText(head, { x: 50, y: 700, size: 12, font });
+      page.drawText('Pérez Gómez y otros', { x: 50 + font.widthOfTextAtSize(head, 12), y: 700, size: 12, font });
+      page.drawText('Segunda línea intacta', { x: 50, y: 680, size: 12, font });
+    });
+    const pdfium = createPdfium(runtime);
+    pdfium.open(bytes);
+    expect(pdfium.editPage(0, { mode: 'protect', needles: [{ value: 'Ana María Pérez Gómez', put: '[PERSONA_1]' }] })).toEqual({ replaced: 1 });
+    const out = pdfium.save();
+    pdfium.close();
+    expect((await pdfjsLines(out))[0]).toEqual(['Contra [PERSONA_1] y otros', 'Segunda línea intacta']);
+  });
+
+  // Runtime real con una función de PDFium cambiada, para provocar fallos que una fixture no da.
+  const patched = (overrides) => ({ mem: runtime.mem, fn: new Proxy(runtime.fn, { get: (target, key) => overrides[key]?.(target[key].bind(target)) ?? target[key] }) });
+  const splitLine = () => onePage((page, font) => {
+    page.drawText('Contra Ana María Pérez Gómez y otros', { x: 50, y: 700, size: 12, font });
+  });
+
+  it('a word that cannot be written back fails the page, and the half-edited document can no longer be saved', async () => {
+    const pdfium = createPdfium(patched({ FPDFText_SetText: (real) => (obj, ptr) => (runtime.mem.readU16String(ptr) === 'otros' ? false : real(obj, ptr)) }));
+    pdfium.open(await splitLine());
+    const list = [{ value: 'Ana María Pérez Gómez', put: '[PERSONA_1]' }];
+    expect(() => pdfium.editPage(0, { mode: 'protect', needles: list })).toThrow(expect.objectContaining({ code: 'font' }));
+    expect(() => pdfium.save()).toThrow(expect.objectContaining({ code: 'poisoned' }));
+    expect(() => pdfium.editPage(0, { mode: 'protect', needles: list })).toThrow(expect.objectContaining({ code: 'poisoned' }));
+    pdfium.close();
+    pdfium.open(fixture('prosa_sintetico.pdf')); // un documento nuevo empieza limpio
+    expect(pdfium.save()).toBeInstanceOf(Uint8Array);
+    pdfium.close();
+  });
+
+  it('a failure before anything was erased does not poison the document', () => {
+    const pdfium = createPdfium(runtime);
+    pdfium.open(fixture('prosa_sintetico.pdf'));
+    expect(() => pdfium.editPage(0, { mode: 'protect', needles: 'x' })).toThrow(expect.objectContaining({ code: 'bad-input' }));
+    expect(pdfium.save()).toBeInstanceOf(Uint8Array);
+    pdfium.close();
+  });
+
+  it('a glyph without Unicode in a word to re-set → refused, never a shortened word', async () => {
+    const pdfium = createPdfium(patched({ FPDFText_GetUnicode: (real) => (page, i) => (real(page, i) === 0x79 ? 0 : real(page, i)) })); // la «y»
+    pdfium.open(await splitLine());
+    expect(() => pdfium.editPage(0, { mode: 'protect', needles: [{ value: 'Ana María Pérez Gómez', put: '[PERSONA_1]' }] }))
+      .toThrow(expect.objectContaining({ code: 'font' }));
+    pdfium.close();
+  });
+
+  it('text lost outside the values (e.g. a neighbouring line clipped by the redaction) → lost-text', async () => {
+    // La redacción quita también lo que se pone después: un tag que no llega a la página falta en el conteo.
+    const pdfium = createPdfium(patched({ FPDFPage_InsertObjectAtIndex: (real) => (page, obj, at) => { real(page, obj, at); runtime.fn.FPDFPage_RemoveObject(page, obj); return true; } }));
+    pdfium.open(await splitLine());
+    expect(() => pdfium.editPage(0, { mode: 'protect', needles: [{ value: 'Ana María Pérez Gómez', put: '[PERSONA_1]' }] }))
+      .toThrow(expect.objectContaining({ code: 'lost-text' }));
+    expect(() => pdfium.save()).toThrow(expect.objectContaining({ code: 'poisoned' }));
+    pdfium.close();
+  });
+
+  it('a redaction that creates a new object (an anchor could alias it) → anchor, document poisoned', async () => {
+    const pdfium = createPdfium(patched({ EPDFPage_ApplyRedactions: (real) => (page, ...rest) => {
+      const ok = real(page, ...rest);
+      runtime.fn.FPDFPage_InsertObject(page, runtime.fn.FPDFPageObj_CreateNewRect(0, 0, 1, 1));
+      return ok;
+    } }));
+    pdfium.open(await splitLine());
+    expect(() => pdfium.editPage(0, { mode: 'protect', needles: [{ value: 'Ana María Pérez Gómez', put: '[PERSONA_1]' }] }))
+      .toThrow(expect.objectContaining({ code: 'anchor' }));
+    expect(() => pdfium.save()).toThrow(expect.objectContaining({ code: 'poisoned' }));
+    pdfium.close();
+  });
+
+  it('tight leading (9 pt under 12 pt text): the line below the value keeps every character', async () => {
+    const bytes = await onePage((page, font) => {
+      page.drawText('Demandante Ana María Pérez Gómez contra', { x: 50, y: 700, size: 12, font });
+      page.drawText('gjpqy línea de abajo muy pegada', { x: 50, y: 691, size: 12, font });
+    });
+    const pdfium = createPdfium(runtime);
+    pdfium.open(bytes);
+    expect(pdfium.editPage(0, { mode: 'protect', needles: [{ value: 'Ana María Pérez Gómez', put: '[PERSONA_1]' }] })).toEqual({ replaced: 1 });
+    const out = pdfium.save();
+    pdfium.close();
+    expect((await pdfjsLines(out))[0]).toEqual(['Demandante [PERSONA_1] contra', 'gjpqy línea de abajo muy pegada']);
+  });
+
+  it('a page without any value is left as it was', () => {
+    const pdfium = createPdfium(runtime);
+    pdfium.open(fixture('prosa_sintetico.pdf'));
+    expect(pdfium.editPage(0, { mode: 'protect', needles: [{ value: 'Nadie Que Exista', put: '[PERSONA_9]' }] })).toEqual({ replaced: 0 });
+    expect(pdfium.editPage(0, { mode: 'protect', needles: [] })).toEqual({ replaced: 0 });
+    pdfium.close();
+  });
+
+  it('rejects bad calls without leaking', () => {
+    const counted = countingRuntime(runtime);
+    const pdfium = createPdfium(counted.runtime);
+    const ok = { mode: 'protect', needles };
+    expect(() => pdfium.editPage(0, ok)).toThrow(expect.objectContaining({ code: 'no-document' }));
+    expect(() => pdfium.save()).toThrow(expect.objectContaining({ code: 'no-document' }));
+    pdfium.open(fixture('tabla_sintetico.pdf'));
+    expect(() => pdfium.editPage(7, ok)).toThrow(expect.objectContaining({ code: 'bad-page' }));
+    for (const bad of [
+      undefined,
+      { mode: 'restore', needles },
+      { mode: 'protect' },
+      { mode: 'protect', needles: [{ value: ' ', put: '[A_1]' }] },
+      { mode: 'protect', needles: [{ value: 'x'.repeat(501), put: '[A_1]' }] },
+      { mode: 'protect', needles: [{ value: 'Ana', put: 'sin corchetes' }] },
+      { mode: 'protect', needles: [{ value: 'Ana', put: '[DIRECCIÓN_1]' }] },
+      { mode: 'protect', needles: [{ value: 'Ana', put: '[A]B]' }] },
+      { mode: 'protect', needles: Array.from({ length: 5001 }, () => ({ value: 'Ana', put: '[A_1]' })) }
+    ]) expect(() => pdfium.editPage(0, bad)).toThrow(expect.objectContaining({ code: 'bad-input' }));
+    pdfium.close();
+    expect(counted.live.size).toBe(0);
+    expect(counted.opened).toEqual({ page: 0, text: 0 });
+  });
+});
+
 describe('engine worker: message protocol', () => {
   it('init → ready, then calls answer by id; errors carry the PDFium code', async () => {
     const replies = [];
@@ -149,6 +362,26 @@ describe('engine worker: message protocol', () => {
     expect(replies.pop()).toEqual({ type: 'result', id: 4, ok: false, error: { code: 'bad-method' } });
     await handle({ data: { type: 'call', id: 5, method: 'close' } });
     expect(replies.pop()).toMatchObject({ id: 5, ok: true });
+  });
+
+  it('editPage and save go through; the saved bytes are transferred, not copied', async () => {
+    const tablaNeedles = Object.entries(JSON.parse(readFileSync(join(root, 'tests/fixtures/tabla_sintetico.json'), 'utf8'))).map(([put, value]) => ({ value, put }));
+    const replies = [];
+    const handle = createWorkerHandler((message, transfer = []) => replies.push({ message, transfer }), () => runtime);
+    await handle({ data: { type: 'init', wasmBinary: new Uint8Array(0) } });
+    await handle({ data: { type: 'call', id: 1, method: 'open', args: [fixture('prosa_sintetico.pdf'), ''] } });
+    await handle({ data: { type: 'call', id: 2, method: 'editPage', args: [0, { mode: 'protect', needles: tablaNeedles }] } });
+    const edited = replies.pop().message;
+    expect(edited).toMatchObject({ type: 'result', id: 2, ok: true });
+    expect(edited.result.replaced).toBeGreaterThan(0);
+    await handle({ data: { type: 'call', id: 3, method: 'save', args: [] } });
+    const { message, transfer } = replies.pop();
+    expect(message).toMatchObject({ id: 3, ok: true });
+    expect(message.result).toBeInstanceOf(Uint8Array);
+    expect(transfer).toEqual([message.result.buffer]);
+    await handle({ data: { type: 'call', id: 4, method: 'editPage', args: [0, { mode: 'protect', needles: 'x' }] } });
+    expect(replies.pop().message).toMatchObject({ id: 4, ok: false, error: { code: 'bad-input' } });
+    await handle({ data: { type: 'call', id: 5, method: 'close' } });
   });
 
   it('a runtime that fails to start (wasm blocked) answers error, not ready', async () => {
@@ -180,6 +413,8 @@ function installFakes({ files, behaviour = 'ready' } = {}) {
       } else if (message.type === 'call') {
         if (message.method === 'pageStats') reply({ type: 'result', id: message.id, ok: true, result: { visibleChars: 40, invisibleChars: 0, imageCoverage: 0, hasImages: false } });
         if (message.method === 'open') reply({ type: 'result', id: message.id, ok: false, error: { code: 'password' } });
+        if (message.method === 'editPage') reply({ type: 'result', id: message.id, ok: true, result: { replaced: 2 } });
+        if (message.method === 'save') reply({ type: 'result', id: message.id, ok: true, result: new Uint8Array([37, 80, 68, 70]) });
         // 'close' no responde: sirve para probar terminate() con llamadas pendientes
       }
     }
@@ -224,6 +459,26 @@ describe('engine loader', () => {
     expect(init.transfer).toEqual([init.message.wasmBinary.buffer]);
     expect(await a.pageStats(0)).toMatchObject({ visibleChars: 40 });
     await expect(a.open(new Uint8Array([1, 2]), 'clave')).rejects.toMatchObject({ name: 'EngineError', code: 'password' });
+  });
+
+  it('editPage sends only page, mode and needles; save answers the bytes; a page with no answer times out', async () => {
+    const { workers } = installFakes({ files: goodFiles });
+    const client = await createEngineLoader(ENGINE)();
+    const needles = [{ value: 'Ana', put: '[PERSONA_1]' }];
+    await expect(client.editPage(0, { mode: 'protect', needles, extra: 'no viaja' })).resolves.toEqual({ replaced: 2 });
+    expect(workers[0].posted.at(-1).message).toMatchObject({ method: 'editPage', args: [0, { mode: 'protect', needles }] });
+    expect(workers[0].posted.at(-1).message.args[1]).not.toHaveProperty('extra');
+    expect([...await client.save()]).toEqual([37, 80, 68, 70]);
+    vi.useFakeTimers();
+    try {
+      workers[0].postMessage = () => {}; // PDFium colgado en esta página
+      const hung = client.editPage(1, { mode: 'protect', needles });
+      vi.advanceTimersByTime(10_001);
+      await expect(hung).rejects.toMatchObject({ code: 'timeout' });
+      expect(workers[0].terminated).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('open() transfers a copy, never the caller\'s buffer', async () => {
