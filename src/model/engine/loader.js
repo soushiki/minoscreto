@@ -131,7 +131,7 @@ function createClient(worker, onDead) {
     },
     pageStats: (pageIndex) => call('pageStats', [pageIndex]),
     /** `needles`: [{ value, put }]; una página por llamada, con su propio tiempo límite (ADR-005). */
-    editPage: (pageIndex, { mode, needles }) => call('editPage', [pageIndex, { mode, needles }]),
+    editPage: (pageIndex, options) => call('editPage', [pageIndex, { mode: options?.mode, needles: options?.needles }]),
     /** Bytes del documento entero, sin cifrado. */
     save: () => call('save', [], [], SAVE_TIMEOUT_MS),
     close: () => call('close'),

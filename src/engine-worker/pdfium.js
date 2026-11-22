@@ -200,14 +200,17 @@ export function createPdfium({ fn, mem }) {
       const count = fn.FPDFText_CountChars(textPage);
       if (count <= 0) return { replaced: 0 };
       const objOf = new Array(count);
-      let text = '';
+      const chars = new Array(count); // un texto por carácter de PDFium (dos unidades UTF-16 fuera del plano básico)
+      const charAt = []; // unidad UTF-16 del texto de la página → carácter de PDFium
       for (let i = 0; i < count; i++) {
         objOf[i] = fn.FPDFText_GetTextObject(textPage, i) || 0;
         const cp = fn.FPDFText_GetUnicode(textPage, i);
-        // Una unidad UTF-16 por carácter de PDFium, para que las posiciones coincidan; lo que no cabe no es letra ni cifra.
-        text += cp > 0 && cp <= 0xffff && (cp < 0xd800 || cp > 0xdfff) ? String.fromCharCode(cp) : '�';
+        // Lo que no es un carácter válido no es letra ni cifra: no se une a un valor.
+        chars[i] = cp > 0 && cp <= 0x10ffff && (cp < 0xd800 || cp > 0xdfff) ? String.fromCodePoint(cp) : '�';
+        for (let u = 0; u < chars[i].length; u++) charAt.push(i);
       }
-      const found = findOccurrences(text, needles.map((n, id) => ({ id, value: n.value })));
+      const found = findOccurrences(chars.join(''), needles.map((n, id) => ({ id, value: n.value })))
+        .map((o) => ({ start: charAt[o.start], end: charAt[o.end - 1] + 1, id: o.id }));
       if (!found.length) return { replaced: 0 };
 
       const topLevel = Array.from({ length: fn.FPDFPage_CountObjects(page) }, (_, i) => fn.FPDFPage_GetObject(page, i));
@@ -250,7 +253,7 @@ export function createPdfium({ fn, mem }) {
           pushWords(plan.seq, at, match.start);
           const first = firstObject(objOf, match.start, match.end);
           plan.seq.push({ put: needles[match.id].put, at: originOf(match.start), style: styleOf(first),
-            width: rectsOf(match.start, match.end).reduce((sum, [left, , right]) => sum + Math.abs(right - left), 0) });
+            width: extentAlong(styleOf(first).matrix, firstLine(rectsOf(match.start, match.end), index)) });
           at = match.end;
         }
         pushWords(plan.seq, at, plan.end);
@@ -259,7 +262,7 @@ export function createPdfium({ fn, mem }) {
       function pushWords(seq, from, to) {
         let word = null;
         for (let k = from; k < to; k++) {
-          if (!objOf[k] || /\s/u.test(text[k])) { word = null; continue; }
+          if (!objOf[k] || /\s/u.test(chars[k])) { word = null; continue; }
           if (!word || word.obj !== objOf[k]) {
             word = { text: '', at: originOf(k), obj: objOf[k], style: styleOf(objOf[k]) };
             seq.push(word);
@@ -301,7 +304,9 @@ export function createPdfium({ fn, mem }) {
       if (objectsNow().some((obj) => !original.has(obj))) throw new PdfiumFault('anchor', `página ${index}`);
       const inserted = new Set();
       let replaced = 0;
-      for (const plan of plans) {
+      // En el orden del flujo, no del texto: un tramo que va antes en el flujo inserta antes, y uno que comparte
+      // ancla con él queda después de lo suyo.
+      for (const plan of [...plans].sort((x, y) => x.position - y.position || x.from - y.from)) {
         const list = objectsNow();
         const alive = new Set(list.filter((obj) => !inserted.has(obj))); // lo insertado nunca es ancla
         // El ancla es el objeto del valor si le quedó su comienzo; si no, el más cercano anterior que siga vivo.
@@ -335,9 +340,11 @@ export function createPdfium({ fn, mem }) {
         try {
           setText(obj, item.put);
           if (!fn.FPDFPageObj_GetBounds(obj, ...quad)) throw new PdfiumFault('font', 'medida de etiqueta');
-          const natural = Math.abs(f32(quad[2], 0) - f32(quad[0], 0)) || 1;
-          const k = Math.max(TAG_MIN_SCALE, Math.min(1, (item.width + TAG_SLACK) / natural));
           const [a, b, c, dd] = item.style.matrix;
+          // Ancho natural de la etiqueta en la página: medida sin transformar × la escala de la matriz en la dirección
+          // del texto (Word pone el tamaño en Tf; LibreOffice, iText o ReportLab a menudo en la matriz).
+          const natural = (Math.abs(f32(quad[2], 0) - f32(quad[0], 0)) * Math.hypot(a, b)) || 1;
+          const k = Math.max(TAG_MIN_SCALE, Math.min(1, (item.width + TAG_SLACK) / natural));
           fn.FPDFPageObj_Transform(obj, k * a, k * b, k * c, k * dd, item.at[0], item.at[1]);
           if (!fn.FPDFPageObj_SetFillColor(obj, ...TAG_COLOR)) throw new PdfiumFault('font', 'color de etiqueta');
           if (!fn.FPDFTextObj_SetTextRenderMode(obj, item.style.mode)) throw new PdfiumFault('font', 'modo de etiqueta');
@@ -446,8 +453,6 @@ function firstObject(objOf, from, to) {
 function planEdits(found, objOf, count, topLevel, index) {
   const plans = [];
   const isTopLevel = new Set(topLevel);
-  const firstSeen = new Map(); // primer carácter de cada objeto en el texto de la página
-  objOf.forEach((obj, k) => { if (obj && !firstSeen.has(obj)) firstSeen.set(obj, k); });
   for (const match of found) {
     const first = firstObject(objOf, match.start, match.end);
     if (!first) throw new PdfiumFault('page', `valor sin objeto en página ${index}`);
@@ -464,14 +469,19 @@ function planEdits(found, objOf, count, topLevel, index) {
     }
     plans.push({ from: match.start, end, first, matches: [match] });
   }
+  const erased = new Uint8Array(count);
+  for (const plan of plans) erased.fill(1, plan.from, plan.end);
   for (const plan of plans) {
     for (let k = plan.from; k < plan.end; k++) {
       // Texto dentro de un formulario (XObject): no hay dónde insertar en orden en la página.
       if (objOf[k] && !isTopLevel.has(objOf[k])) throw new PdfiumFault('nested', `página ${index}`);
     }
     const position = topLevel.indexOf(plan.first);
+    plan.position = position;
     const before = topLevel.slice(0, position).reverse();
-    const keepsHead = firstSeen.get(plan.first) < plan.from;
+    // Le queda comienzo si algún carácter suyo anterior al tramo no lo borra otro tramo.
+    let keepsHead = false;
+    for (let k = 0; k < plan.from && !keepsHead; k++) keepsHead = objOf[k] === plan.first && !erased[k];
     plan.keepsHead = keepsHead;
     plan.anchors = keepsHead ? [plan.first, ...before] : before;
   }
@@ -484,4 +494,25 @@ function sameChars(a, b) {
   const x = [...a].sort((m, n) => m - n);
   const y = [...b].sort((m, n) => m - n);
   return x.every((v, i) => v === y[i]);
+}
+
+/** Largo de unas cajas de página (left, top, right, bottom) en la dirección del texto (a, b) de la matriz. */
+function extentAlong([a, b], rects) {
+  const norm = Math.hypot(a, b) || 1;
+  const [ux, uy] = [Math.abs(a / norm), Math.abs(b / norm)];
+  return rects.reduce((sum, [left, top, right, bottom]) => sum + ux * Math.abs(right - left) + uy * Math.abs(top - bottom), 0);
+}
+
+/**
+ * Las cajas de la primera línea del valor: la etiqueta va en esa línea, así que su ancho manda (un valor partido
+ * en dos líneas no le presta el ancho de la segunda). Sin ninguna caja no hay medida: se rechaza la página.
+ */
+function firstLine(rects, index) {
+  if (!rects.length) throw new PdfiumFault('page', `valor sin caja en página ${index}`);
+  const [, top0, , bottom0] = rects[0];
+  const [low0, high0] = [Math.min(top0, bottom0), Math.max(top0, bottom0)];
+  return rects.filter(([, top, , bottom]) => {
+    const overlap = Math.min(high0, Math.max(top, bottom)) - Math.max(low0, Math.min(top, bottom));
+    return overlap > 0.5 * (high0 - low0);
+  });
 }

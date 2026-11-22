@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { createPdfRuntime } from '@embedpdf/engine-runtime';
-import { PDFDocument, StandardFonts, rgb, pushGraphicsState, popGraphicsState, setTextRenderingMode, TextRenderingMode } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, pushGraphicsState, popGraphicsState, setTextRenderingMode, TextRenderingMode, beginText, endText, setFontAndSize, setTextMatrix, showText } from 'pdf-lib';
 import { createPdfium } from '../src/engine-worker/pdfium.js';
 import { createWorkerHandler } from '../src/engine-worker/index.js';
 import { createEngineLoader, EngineError } from '../src/model/engine/loader.js';
@@ -313,6 +313,77 @@ describe('engine worker: editPage protect + save (T9, ADR-008)', () => {
     expect((await pdfjsLines(out))[0]).toEqual(['Demandante [PERSONA_1] contra', 'gjpqy línea de abajo muy pegada']);
   });
 
+  it('a heading written later in the stream but drawn higher keeps its stream place (guard; PDFium reads in stream order)', async () => {
+    // El encabezado se escribe después en el flujo pero va arriba en la página, y se borra entero.
+    const bytes = await onePage((page, font) => {
+      page.drawText('Demandante: Ana María Pérez Gómez y otros', { x: 50, y: 680, size: 12, font });
+      page.drawText('Construcciones Bahía S.A.S.', { x: 50, y: 700, size: 12, font });
+    });
+    const list = [
+      { value: 'Ana María Pérez Gómez', put: '[PERSONA_1]' },
+      { value: 'Construcciones Bahía S.A.S.', put: '[EMPRESA_1]' }
+    ];
+    const pdfium = createPdfium(runtime);
+    pdfium.open(bytes);
+    expect(pdfium.editPage(0, { mode: 'protect', needles: list })).toEqual({ replaced: 2 });
+    const out = pdfium.save();
+    pdfium.close();
+    expect(await pdfjsLines(out, { raw: true })).toEqual([['Demandante: [PERSONA_1] y otros [EMPRESA_1]']]);
+    expect((await pdfjsLines(out))[0]).toEqual(['[EMPRESA_1]', 'Demandante: [PERSONA_1] y otros']);
+  });
+
+  it('font size in the text matrix (Tf 1, Tm 12) shrinks the tag like Tf 12 does', async () => {
+    const tagWidth = async (viaMatrix) => {
+      const pdf = await PDFDocument.create();
+      const font = await pdf.embedFont(StandardFonts.Helvetica);
+      const page = pdf.addPage([595, 842]);
+      const name = page.node.newFontDictionary(font.name, font.ref);
+      const line = 'Firma Ana hoy';
+      page.pushOperators(
+        beginText(),
+        setFontAndSize(name, viaMatrix ? 1 : 12),
+        viaMatrix ? setTextMatrix(12, 0, 0, 12, 50, 700) : setTextMatrix(1, 0, 0, 1, 50, 700),
+        showText(font.encodeText(line)),
+        endText()
+      );
+      const pdfium = createPdfium(runtime);
+      pdfium.open(await pdf.save({ useObjectStreams: false }));
+      expect(pdfium.editPage(0, { mode: 'protect', needles: [{ value: 'Ana', put: '[PERSONA_1]' }] })).toEqual({ replaced: 1 });
+      const out = pdfium.save();
+      pdfium.close();
+      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      const doc = await pdfjs.getDocument({ data: out, verbosity: 0, isEvalSupported: false }).promise;
+      const items = (await (await doc.getPage(1)).getTextContent()).items;
+      // pdf.js une «Firma » (que queda en su objeto) con la etiqueta: se resta lo que mide «Firma ».
+      return items.find((item) => item.str === 'Firma [PERSONA_1]').width - font.widthOfTextAtSize('Firma ', 12);
+    };
+    const viaTf = await tagWidth(false);
+    const viaTm = await tagWidth(true);
+    // «Ana» mide ~21 pt a 12 pt: la etiqueta (~79 pt) baja al piso del 60 % (~47 pt) en los dos casos.
+    expect(viaTf).toBeGreaterThan(44);
+    expect(viaTf).toBeLessThan(50);
+    expect(viaTm).toBeCloseTo(viaTf, 0);
+  });
+
+  it('a value with characters outside the basic plane is still found and replaced (𝐌)', async () => {
+    const MATH_M = 0x1d40c; // 𝐌, dos unidades UTF-16 (la «M» no está en la etiqueta)
+    const pdfium = createPdfium(patched({ FPDFText_GetUnicode: (real) => (page, i) => (real(page, i) === 0x4d ? MATH_M : real(page, i)) })); // «M» → 𝐌
+    pdfium.open(await splitLine());
+    expect(pdfium.editPage(0, { mode: 'protect', needles: [{ value: 'Ana 𝐌aría Pérez Gómez', put: '[PERSONA_1]' }] })).toEqual({ replaced: 1 });
+    const out = pdfium.save();
+    pdfium.close();
+    expect((await pdfjsLines(out))[0]).toEqual(['Contra [PERSONA_1] y otros']);
+  });
+
+  it('a value PDFium gives no box for is refused before anything is erased (never a silent 60 % tag)', async () => {
+    const pdfium = createPdfium(patched({ FPDFText_CountRects: () => () => 0 }));
+    pdfium.open(await splitLine());
+    expect(() => pdfium.editPage(0, { mode: 'protect', needles: [{ value: 'Ana María Pérez Gómez', put: '[PERSONA_1]' }] }))
+      .toThrow(expect.objectContaining({ code: 'page' }));
+    expect(pdfium.save()).toBeInstanceOf(Uint8Array); // nada se borró: el documento no queda envenenado
+    pdfium.close();
+  });
+
   it('a page without any value is left as it was', () => {
     const pdfium = createPdfium(runtime);
     pdfium.open(fixture('prosa_sintetico.pdf'));
@@ -479,6 +550,15 @@ describe('engine loader', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('editPage without options rejects through the worker instead of throwing in the caller', async () => {
+    const { workers } = installFakes({ files: goodFiles });
+    const client = await createEngineLoader(ENGINE)();
+    let pending;
+    expect(() => { pending = client.editPage(3); }).not.toThrow();
+    await pending;
+    expect(workers[0].posted.at(-1).message.args).toEqual([3, { mode: undefined, needles: undefined }]);
   });
 
   it('open() transfers a copy, never the caller\'s buffer', async () => {
