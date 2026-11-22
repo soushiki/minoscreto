@@ -3,7 +3,10 @@
 // recibe los bytes del wasm. Es el único `fetch` de src/ (fitness en tests/engine.test.js).
 import { ENGINE } from 'virtual:minoscreto-engine';
 
-/** code: 'unavailable' | 'unsupported' | 'wasm' | 'fetch' | 'hash' | 'worker' | 'timeout' | 'terminated', o el de PDFium. */
+/** Códigos propios del cargador; un fallo de PDFium trae el suyo (PdfiumFault del worker). */
+export const LOADER_CODES = Object.freeze(['unavailable', 'unsupported', 'wasm', 'fetch', 'hash', 'worker', 'timeout', 'terminated']);
+
+/** code: uno de LOADER_CODES, o el de PDFium. */
 export class EngineError extends Error {
   constructor(code, detail) {
     super(detail ? `${code}: ${detail}` : code);

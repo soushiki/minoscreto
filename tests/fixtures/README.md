@@ -12,6 +12,7 @@ Todos los datos son inventados. Se regeneran con `python scripts/make-expediente
 | `tabla_sintetico.pdf` | pdf-lib (Helvetica), 2 páginas: título con valores dentro de la frase y tabla de 7 columnas con bordes, un objeto de texto por celda (como un reporte de semanas cotizadas). Valores en `tabla_sintetico.json` | ninguna |
 | `sucio_sintetico.pdf` | PyMuPDF, 2 páginas, con un valor sembrado (`Laura Patricia Ortega Jiménez`) en Info, XMP, nota y texto libre, campo de formulario, índice, adjunto, JavaScript (Names, OpenAction, AA), StructTreeRoot y PieceInfo; flujos de objetos y una revisión anterior (guardado incremental). Para la limpieza S7 | ninguna |
 | `prosa_sintetico.pdf` | pdf-lib (Helvetica), 6 líneas de un expediente, un objeto de texto por línea con los valores en medio (como Word). Mismos valores de `tabla_sintetico.json` | ninguna |
+| `valor_partido_sintetico.pdf` | pdf-lib (Helvetica), una página, hecha una vez: el nombre `Ana María` / `Pérez Gómez` partido en dos líneas, para que la verificación final encuentre el valor que no se cambió (missed-value) | ninguna |
 
 Pendiente (las hace el usuario con sus cuentas): exportaciones a PDF de ChatGPT, Claude y Gemini de una respuesta
 sintética, con nombre `<ia>_exportado_sintetico.pdf`.
