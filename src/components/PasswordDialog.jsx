@@ -93,6 +93,7 @@ export default function PasswordDialog({ prompt, onSubmit, onCancel }) {
         <div className="pw-form">
           <h2 className="pw-h">Este PDF tiene contraseña</h2>
           <p className="pw-file" id={fileId}>{prompt.fileName.trim() || 'Archivo PDF'}</p>
+          {prompt.reason === 'layout' && <p className="pw-note">Escríbala otra vez para hacer el PDF con su diseño original.</p>}
           <label className="pw-label" htmlFor={inputId}>Contraseña</label>
           <div className="pw-field">
             <input ref={inputRef} id={inputId} type={shown ? 'text' : 'password'} autoComplete="off" spellCheck={false}

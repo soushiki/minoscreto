@@ -1,6 +1,18 @@
-/** Lista de lo que se descargó, con el recordatorio del diccionario a la vista. */
+import { imagePagesNote, LAYOUT_OK } from '../viewmodels/messages.js';
+
+/**
+ * Lista de lo que se descargó, con el recordatorio del diccionario a la vista. Mientras se prepara un PDF con
+ * diseño muestra solo la espera y el progreso, en la misma región aria-live (R9, A1).
+ */
 export default function DownloadReceipt({ receipt, onDictionaryAgain }) {
   if (!receipt) return null;
+  if (receipt.kind === 'preparing') {
+    return (
+      <div className="dl-receipt" role="status" aria-live="polite">
+        <p className="dl-preparing">{receipt.text}</p>
+      </div>
+    );
+  }
   const zip = receipt.kind === 'zip';
   const tap = receipt.manual && !receipt.dictDone;
   const mark = (done) => <span className={`dl-mark${done ? ' ok' : ''}`} aria-hidden="true">{done ? '✓' : '…'}</span>;
@@ -16,6 +28,9 @@ export default function DownloadReceipt({ receipt, onDictionaryAgain }) {
           <span><strong>2. Diccionario</strong><small>{zip ? 'Dentro del mismo archivo, en la carpeta NO-SUBIR' : tap ? `Toque «Descargar diccionario» para bajar ${receipt.dictName}` : receipt.dictName}</small></span>
         </li>
       </ol>
+      {receipt.layout && <p className="dl-layout"><strong>{LAYOUT_OK}</strong></p>}
+      {receipt.layout && receipt.imagePages?.length > 0 && <p className="dl-images">{imagePagesNote(receipt.imagePages)}</p>}
+      {receipt.fallback && <p className="dl-fallback">{receipt.fallback}</p>}
       <p className="dl-remind"><strong>Guarde el diccionario:</strong> lo necesitará para recuperar los nombres. No lo suba a la IA.</p>
       <div className="dl-again">
         {tap

@@ -3,9 +3,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 /**
  * Una sola pregunta de contraseña pendiente a la vez (C2, ADR-002).
  *
- * askPassword({ fileName, reason: 'need'|'incorrect', signal }) abre el diálogo y responde con lo escrito o con
+ * askPassword({ fileName, reason: 'need'|'incorrect'|'layout', signal }) abre el diálogo y responde con lo escrito o con
  * null (Cancelar, Escape, signal cancelado, otra pregunta nueva o el componente desmontado). Se entrega tal cual
- * al onPassword de pdf.js (readPdfPages).
+ * al onPassword de pdf.js (readPdfPages). 'layout': se pide otra vez para hacer el PDF con diseño (ADR-007).
  *
  * El estado solo guarda { fileName, reason, attempt, checking }: nunca la contraseña. Tras responder, el diálogo
  * sigue abierto en «Comprobando…» hasta que pdf.js vuelva a preguntar (contraseña incorrecta), el signal se cancele
@@ -67,7 +67,7 @@ export function usePasswordPrompt({ onCancel } = {}) {
     attempts.current += 1;
     setPrompt({
       fileName: String(fileName),
-      reason: reason === 'incorrect' ? 'incorrect' : 'need',
+      reason: reason === 'incorrect' || reason === 'layout' ? reason : 'need',
       attempt: attempts.current,
       checking: false,
     });

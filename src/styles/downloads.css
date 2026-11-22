@@ -7,7 +7,8 @@
 .dl-mark { width: 26px; height: 26px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-weight: 700;
   background: var(--surface2); color: var(--ink2); }
 .dl-mark.ok { background: var(--accent); color: var(--accent-ink); }
-.dl-remind { margin-top: 10px; font-size: 14px; }
+.dl-remind, .dl-layout, .dl-images, .dl-fallback { margin-top: 10px; font-size: 14px; }
+.dl-preparing { margin: 0; font-size: 14px; }
 .dl-again { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; font-size: 12.5px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 

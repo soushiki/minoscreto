@@ -25,11 +25,24 @@ export function useProtectedDownload({ save, notify }) {
     return ok;
   }, [save]);
 
-  /** doc: { name, blob }; dict: { name, text }. */
-  const downloadPair = useCallback(async (doc, dict) => {
+  /**
+   * Antes de una descarga que tarda (PDF con diseño): el texto de espera queda en la lista (aria-live) en el mismo
+   * clic, sin esperar nada (R9: «preparando» en menos de 200 ms). Llamarla otra vez cambia el texto (progreso).
+   */
+  const prepare = useCallback((text) => {
+    clearTimeout(timer.current);
+    setReceipt({ kind: 'preparing', text });
+  }, []);
+
+  /**
+   * doc: { name, blob }; dict: { name, text }.
+   * extra (PDF): { layout: true, imagePages: number[] } si salió con diseño, o { fallback: texto } si no.
+   */
+  const downloadPair = useCallback(async (doc, dict, extra = {}) => {
     clearTimeout(timer.current);
     dictionary.current = dict;
-    setReceipt({ kind: 'pair', docName: doc.name, dictName: dict.name, docDone: false, dictDone: false, manual });
+    const { layout = false, imagePages = [], fallback = '' } = extra;
+    setReceipt({ kind: 'pair', docName: doc.name, dictName: dict.name, docDone: false, dictDone: false, manual, layout, imagePages, fallback });
     const ok = await save(doc.name, doc.blob);
     if (!ok) { setReceipt(null); return false; }
     setReceipt((r) => ({ ...r, docDone: true }));
@@ -59,5 +72,5 @@ export function useProtectedDownload({ save, notify }) {
     }
   }, [notify]);
 
-  return { receipt, downloadPair, downloadBundle, downloadDictionaryAgain: saveDictionary, clear, copyText };
+  return { receipt, prepare, downloadPair, downloadBundle, downloadDictionaryAgain: saveDictionary, clear, copyText };
 }

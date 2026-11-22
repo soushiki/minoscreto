@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { Script, createContext, runInContext } from 'node:vm';
 import { gzipSync } from 'node:zlib';
-import { build } from 'vite';
+import { build, createLogger } from 'vite';
 import { ENGINE } from 'virtual:minoscreto-engine';
 
 const root = resolve(__dirname, '..');
@@ -15,6 +15,7 @@ const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 let outDir;
 let html;
 let engineFiles;
+let reportedGzip; // kB gz de index.html, tal como lo imprime Vite al terminar el build
 
 beforeAll(async () => {
   outDir = mkdtempSync(join(tmpdir(), 'minoscreto-build-'));
@@ -22,7 +23,13 @@ beforeAll(async () => {
   const nodeEnv = process.env.NODE_ENV;
   process.env.NODE_ENV = 'production';
   try {
-    await build({ root, mode: 'production', configFile: resolve(root, 'vite.config.js'), logLevel: 'silent', build: { outDir, emptyOutDir: true } });
+    const logger = createLogger('info');
+    const lines = [];
+    logger.info = (message) => { lines.push(message); };
+    await build({ root, mode: 'production', configFile: resolve(root, 'vite.config.js'), customLogger: logger, build: { outDir, emptyOutDir: true } });
+    // eslint-disable-next-line no-control-regex
+    const row = lines.join('\n').replace(/\x1b\[[0-9;]*m/g, '').match(/index\.html\s.*?gzip:\s*([\d.,]+)\s*kB/);
+    reportedGzip = row ? Number(row[1].replace(/,/g, '')) : null;
   } finally {
     if (nodeEnv === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = nodeEnv;
@@ -44,8 +51,10 @@ describe('ADR-004: engine stays out of the page', () => {
     expect(html).not.toContain('createPdfRuntimeWasm');
   });
 
-  it('index.html stays at most 910 kB gzipped, as Vite reports it (S4)', () => {
-    expect(gzipSync(html, { level: 9 }).length).toBeLessThanOrEqual(910_000);
+  it('index.html stays at most 912 kB gzipped, as Vite reports it (S4; budget raised from 910 by the user 2026-11-22)', () => {
+    expect(reportedGzip).toBeGreaterThan(0);
+    expect(reportedGzip).toBeLessThanOrEqual(912);
+    expect(gzipSync(html, { level: 9 }).length).toBeLessThan(reportedGzip * 1000); // la cifra es de este archivo, no de otro
   });
 
   it('emits exactly one worker and one wasm, each named by its SHA-256', () => {
@@ -100,6 +109,15 @@ describe('ADR-004: engine stays out of the page', () => {
       { type: 'result', id: 3, ok: true, result: undefined }
     ]);
   }, 60_000);
+
+  it('index.html names each engine file with its full SHA-256, the pair the loader checks (S6)', () => {
+    for (const name of engineFiles) {
+      const hash = sha256(readFileSync(join(outDir, 'engine', name)));
+      const q = '["\'`]'; // el minificador elige comillas o acentos graves
+      const pair = new RegExp(`${q}?url${q}?:${q}/engine/${name.replace(/\./g, '\\.')}${q},${q}?sha256${q}?:${q}${hash}${q}`);
+      expect(html).toMatch(pair);
+    }
+  });
 
   it('outside a build ENGINE is null (no engine in dev or tests)', () => {
     expect(ENGINE).toBeNull();

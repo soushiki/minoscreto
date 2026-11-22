@@ -2,7 +2,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useReducer, useRef }
 import {
   buildDictionary, bundleFileName, dictionaryFileName, dictionaryJson, DocxError, exportCode, protectedFileName, renameLabel
 } from '../model/index.js';
-import { OMITTED_CHARS } from './messages.js';
+import { LAYOUT_FALLBACK, LAYOUT_PREPARING, layoutProgress, OMITTED_CHARS } from './messages.js';
 import {
   buildPartsZip, buildSearchIndex, estimateTokens, formatPageRanges, renderParts, renderWhole, searchIndex, splitParts, unitOf
 } from '../model/expediente/index.js';
@@ -19,11 +19,25 @@ export function useExpediente({ save, notify }) {
   const [state, dispatch] = useReducer(expedienteReducer, initialExpediente);
   const { docs, entities, reduce, applied, appliedFor, selected, scope, format, split, query } = state;
   const abort = useRef(null);
-  // Cancelar en el diálogo corta la lectura en curso, igual que «Cancelar» de la pantalla de progreso (sin aviso).
-  const password = usePasswordPrompt({ onCancel: () => { abort.current?.abort(); dispatch({ type: 'failed' }); } });
+  // PDF cargado (copia de sus bytes y si pidió contraseña) para el PDF con diseño; se borra con otro archivo.
+  const source = useRef(null);
+  const layoutAbort = useRef(null);
+  const layoutCancelled = useRef(false);
+  const busy = useRef(false);
+  // A quién responde «Cancelar» del diálogo: a la lectura ('read') o al PDF con diseño ('layout', ADR-007).
+  const passwordMode = useRef('read');
+  // Cancelar en la lectura la corta, igual que «Cancelar» de la pantalla de progreso (sin aviso). En el PDF con
+  // diseño corta solo ese intento: sale el PDF de texto con su aviso.
+  const password = usePasswordPrompt({
+    onCancel: () => {
+      if (passwordMode.current === 'layout') { layoutCancelled.current = true; layoutAbort.current?.abort(); return; }
+      abort.current?.abort(); source.current = null; dispatch({ type: 'failed' });
+    }
+  });
   const { askPassword, close: closePassword } = password;
   const protectedDownload = useProtectedDownload({ save, notify });
-  const { clear: clearReceipt, downloadPair, downloadBundle, copyText } = protectedDownload;
+  const { clear: clearReceipt, prepare, downloadPair, downloadBundle, copyText } = protectedDownload;
+  useEffect(() => () => { layoutAbort.current?.abort(); }, []);
   useEffect(() => { clearReceipt(); }, [docs, clearReceipt]);
 
   const doc = docs ? (reduce ? docs.reduced : docs.full) : null;
@@ -109,16 +123,19 @@ export function useExpediente({ save, notify }) {
       return { paragraphs };
     }
     const { readPdfPages } = await import('../model/expediente/pdfjs.js');
+    // Copia antes de pdf.js (puede quedarse con el buffer): es lo que abre el motor del PDF con diseño.
+    const bytes = new Uint8Array(buffer.slice(0));
+    let hadPassword = false;
     let lastPaint = 0;
     const pages = await readPdfPages(new Uint8Array(buffer), {
       signal,
-      askPassword,
+      askPassword: (options) => { hadPassword = true; return askPassword(options); },
       fileName: file.name,
       onProgress: (done, total) => {
         if (done === total || now() - lastPaint > 80) { lastPaint = now(); dispatch({ type: 'progress', done, total }); }
       }
     });
-    return { pages };
+    return { pages, original: { bytes, hadPassword } };
   }, [askPassword]);
 
   const loadFile = useCallback(async (file) => {
@@ -128,16 +145,18 @@ export function useExpediente({ save, notify }) {
       return;
     }
     abort.current?.abort();
+    layoutAbort.current?.abort();
+    source.current = null;
     const controller = new AbortController();
     abort.current = controller;
     const isWord = /\.docx$/i.test(file.name);
     dispatch({ type: 'reading', name: file.name.replace(/\.(pdf|docx)$/i, ''), kind: isWord ? 'docx' : 'pdf' });
     try {
       const t = now();
-      const source = await readSource(file, controller.signal);
+      const { original, ...read } = await readSource(file, controller.signal);
       if (controller.signal.aborted) return;
       dispatch({ type: 'analyzing', readMs: now() - t });
-      const result = await runExpedienteTask('prepare', source);
+      const result = await runExpedienteTask('prepare', read);
       if (controller.signal.aborted) return;
       if (!result.full.paragraphs.length) {
         dispatch({ type: 'failed' });
@@ -146,6 +165,7 @@ export function useExpediente({ save, notify }) {
       }
       // Ids propios de esta pantalla: los del worker podrían repetirse con los que se crean aquí.
       const ids = result.entities.map((e, i) => ({ ...e, id: `x${i + 1}` }));
+      source.current = original ?? null;
       dispatch({ type: 'loaded', docs: { full: result.full, reduced: result.reduced }, entities: ids, layoutMs: result.layoutMs, detectMs: result.detectMs });
       const { unit: u, pageCount: n, emptyPages } = result.full;
       const names = unitOf(u);
@@ -163,20 +183,92 @@ export function useExpediente({ save, notify }) {
     }
   }, [notify, readSource, closePassword]);
 
-  const cancel = useCallback(() => { abort.current?.abort(); dispatch({ type: 'failed' }); }, []);
+  const cancel = useCallback(() => { abort.current?.abort(); source.current = null; dispatch({ type: 'failed' }); }, []);
+
+  /**
+   * PDF con diseño original (R1–R10): motor primero (si no carga, sin preguntar nada), la contraseña otra vez si el
+   * archivo la tenía (ADR-007), luego protectLayout. Responde { bytes, imagePages }, { fallback: aviso } o 'aborted'
+   * (otro archivo o pantalla cerrada: no se descarga nada).
+   */
+  const makeLayout = useCallback(async (original) => {
+    prepare(LAYOUT_PREPARING);
+    const controller = new AbortController();
+    layoutAbort.current = controller;
+    layoutCancelled.current = false;
+    const stopped = () => (layoutCancelled.current ? { fallback: LAYOUT_FALLBACK['password-cancel'] } : 'aborted');
+    // Otro archivo cargado mientras tanto: su diálogo de contraseña no es de este intento.
+    const current = () => source.current === original;
+    try {
+      const { loadEngine } = await import('../model/engine/loader.js');
+      try { await loadEngine(); } catch { return controller.signal.aborted ? 'aborted' : { fallback: LAYOUT_FALLBACK.engine }; }
+      if (controller.signal.aborted) return 'aborted';
+      const { protectLayout } = await import('../model/layout/protect.js');
+      let reason = 'layout';
+      for (;;) {
+        let pass = '';
+        if (original.hadPassword) {
+          passwordMode.current = 'layout';
+          pass = await askPassword({ fileName: `${state.name}.pdf`, reason, signal: controller.signal });
+          if (pass === null) return controller.signal.aborted && !layoutCancelled.current ? 'aborted' : { fallback: LAYOUT_FALLBACK['password-cancel'] };
+        }
+        let lastPaint = 0;
+        let opened = false;
+        try {
+          return await protectLayout({
+            bytes: original.bytes.slice(), password: pass, entities, signal: controller.signal,
+            onProgress: ({ phase, done, total }) => {
+              if (phase === 'scan' && !opened) { opened = true; if (original.hadPassword && current()) closePassword(); }
+              if (phase === 'edit' && (done === total || now() - lastPaint > 500)) { lastPaint = now(); prepare(layoutProgress(done, total)); }
+            }
+          });
+        } catch (error) {
+          if (error?.name === 'AbortError' || controller.signal.aborted) return stopped();
+          if (error?.name !== 'LayoutRefused') return { fallback: LAYOUT_FALLBACK.error };
+          if (error.where === 'password' && original.hadPassword) { reason = 'incorrect'; continue; }
+          return { fallback: error.reason === 'scan' ? LAYOUT_FALLBACK.scan(error.pages) : (LAYOUT_FALLBACK[error.reason] ?? LAYOUT_FALLBACK.error) };
+        }
+      }
+    } finally {
+      if (current()) {
+        passwordMode.current = 'read';
+        if (original.hadPassword) closePassword();
+      }
+      if (layoutAbort.current === controller) layoutAbort.current = null;
+    }
+  }, [prepare, askPassword, closePassword, entities, state.name]);
 
   // Un archivo: el .md protegido y, medio segundo después, el diccionario. En partes: un .zip que trae ambos.
   const download = useCallback(async () => {
-    if (!rendered.length) return;
+    if (!rendered.length || busy.current) return; // un segundo clic mientras se prepara no hace nada
+    busy.current = true;
     const t = now();
     const code = exportCode(); // uno por exportación: los archivos para la IA (nombre neutro) ↔ su diccionario
     const dict = { name: dictionaryFileName(state.name, code), text: dictionaryJson(dictionary) };
     try {
       if (rendered.length === 1 && state.kind === 'pdf') {
+        // Con diseño el documento entero, aunque «Reducir tamaño» esté marcado (reduce es para el texto de la IA, user 2026-11-22); «Solo marcados» → PDF de texto, sin aviso.
+        const original = scope !== 'selection' ? source.current : null;
+        let extra = {};
+        if (original) {
+          const layout = await makeLayout(original);
+          if (layout === 'aborted') { if (source.current === original) clearReceipt(); return; }
+          if (layout.bytes) {
+            // El PDF con diseño cambia cada dato activo del documento entero, también los de encabezados que «Reducir
+            // tamaño» quita del texto: su diccionario los trae todos, con las variantes en el orden del texto completo.
+            const sources = reduce
+              ? (await runExpedienteTask('apply', { texts: docs.full.paragraphs.map((p) => p.text), entities })).sources
+              : applied.sources;
+            const full = { name: dict.name, text: dictionaryJson(buildDictionary(entities, null, sources)) };
+            await downloadPair({ name: protectedFileName(code, 'pdf'), blob: new Blob([layout.bytes], { type: 'application/pdf' }) }, full, { layout: true, imagePages: layout.imagePages });
+            dispatch({ type: 'exported', ms: now() - t });
+            return;
+          }
+          extra = { fallback: layout.fallback };
+        }
         const { writeTextPdf } = await import('../model/pdf/writer.js');
         const { bytes, dropped } = await writeTextPdf({ lines: rendered[0].text.split('\n') });
         if (dropped.length) notify(OMITTED_CHARS, true);
-        await downloadPair({ name: protectedFileName(code, 'pdf'), blob: new Blob([bytes], { type: 'application/pdf' }) }, dict);
+        await downloadPair({ name: protectedFileName(code, 'pdf'), blob: new Blob([bytes], { type: 'application/pdf' }) }, dict, extra);
       } else if (rendered.length === 1) {
         await downloadPair({ name: protectedFileName(code, 'md'), blob: new Blob([rendered[0].text], { type: 'text/markdown;charset=utf-8' }) }, dict);
       } else {
@@ -188,9 +280,12 @@ export function useExpediente({ save, notify }) {
       }
       dispatch({ type: 'exported', ms: now() - t });
     } catch (error) {
+      clearReceipt();
       notify(`No se pudo exportar: ${error.message}`, true);
+    } finally {
+      busy.current = false;
     }
-  }, [rendered, state.name, state.kind, dictionary, downloadPair, downloadBundle, notify]);
+  }, [rendered, state.name, state.kind, scope, dictionary, reduce, docs, entities, applied, makeLayout, clearReceipt, downloadPair, downloadBundle, notify]);
 
   /** Copia el texto de una parte (o del archivo único) para pegarlo en la IA sin descomprimir nada. */
   const copyPart = useCallback((index = 0) => {

@@ -11,6 +11,10 @@ import {
 import { buildPartsZip, renderParts, splitParts, anonymizeTexts } from '../src/model/expediente/index.js';
 import { DICTIONARY_DELAY } from '../src/viewmodels/useProtectedDownload.js';
 import { isAppleTouch } from '../src/viewmodels/platform.js';
+import { LAYOUT_FALLBACK, LAYOUT_OK, LAYOUT_PREPARING } from '../src/viewmodels/messages.js';
+import { createPdfRuntime } from '@embedpdf/engine-runtime';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { createPdfium } from '../src/engine-worker/pdfium.js';
 
 // jsdom no tiene Worker: pdf.js corre su build legacy en el mismo hilo (como en passwordDialog.test.jsx).
 // slowFirstDestroy: la primera lectura tarda en rechazar tras cancelarse, para que su `finally` llegue después de la pregunta del archivo nuevo.
@@ -33,6 +37,13 @@ vi.mock('pdfjs-dist', async () => {
   };
 });
 vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?worker&inline', () => ({ default: class {} }));
+// T11: el motor del PDF con diseño. Sin `engine.load` el cargador real falla (ENGINE es null fuera del build) →
+// PDF de texto con el aviso «engine». Con `engine.load`, PDFium real en el mismo proceso (como tests/protect.test.js).
+const engine = vi.hoisted(() => ({ load: null }));
+vi.mock('../src/model/engine/loader.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, loadEngine: (...args) => (engine.load ? engine.load(...args) : actual.loadEngine(...args)) };
+});
 
 const encode = (s) => new TextEncoder().encode(s);
 let downloads;
@@ -48,7 +59,7 @@ beforeEach(() => {
   URL.revokeObjectURL = vi.fn();
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function click() { downloads.push(this.download); });
 });
-afterEach(() => { slow.on = false; cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { slow.on = false; engine.load = null; cleanup(); vi.restoreAllMocks(); });
 
 const mockClipboard = () => {
   const writeText = vi.fn(() => Promise.resolve());
@@ -240,6 +251,8 @@ describe('descarga y copia en la app', () => {
       const code = codeIn(downloads[0]);
       expect(downloads).toEqual([`documento-${code}_protegido.pdf`, `caso_diccionario-${code}.json`]);
       expect(document.querySelector('.toast')?.textContent ?? '').not.toMatch(/omitieron/);
+      // Sin build el motor no carga: PDF de texto con el aviso, sin volver a pedir la contraseña.
+      expect(document.querySelector('.dl-fallback').textContent).toBe(LAYOUT_FALLBACK.engine);
       const bytes = new Uint8Array(await blobs[0].arrayBuffer());
       const { readPdfPages } = await import('../src/model/expediente/pdfjs.js');
       const pages = await readPdfPages(bytes);
@@ -308,4 +321,253 @@ describe('descarga y copia en la app', () => {
     fireEvent.change(screen.getByPlaceholderText(/Pega aquí la respuesta/), { target: { value: 'Según [PERSONA_1], todo bien.' } });
     await waitFor(() => expect(document.querySelector('.restored').textContent).toContain('Según Carlos Andrés Mendoza Ríos, todo bien.'));
   }, 15000);
+});
+
+describe('PDF con diseño original (T11)', () => {
+  const PASSWORD = 'minoscreto-prueba';
+  const PNG_1PX = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0));
+  const LINE = 'Demandante: Ana María Pérez Gómez, cédula 1.047.123.456, vecina de Cartagena, presentó la demanda.';
+  let runtime;
+  beforeAll(async () => { runtime = await createPdfRuntime({ prefer: 'wasm' }); }, 30000);
+
+  // Cliente como el del cargador, sobre PDFium en el mismo proceso; `fault` hace fallar un método.
+  function useEngine({ fault = {} } = {}) {
+    const pdfium = createPdfium(runtime);
+    const run = (name, fn) => async (...args) => { if (fault[name]) throw fault[name]; return fn(...args); };
+    const client = {
+      open: run('open', (bytes, password) => pdfium.open(new Uint8Array(bytes), password)),
+      pageStats: run('pageStats', (p) => pdfium.pageStats(p)),
+      editPage: run('editPage', (p, options) => pdfium.editPage(p, options)),
+      save: run('save', () => pdfium.save()),
+      close: run('close', () => pdfium.close()),
+      alive: true
+    };
+    engine.load = async () => client;
+  }
+
+  async function makePdf(pages) {
+    const doc = await PDFDocument.create({ updateMetadata: false });
+    const font = await doc.embedFont(StandardFonts.Helvetica);
+    const png = await doc.embedPng(PNG_1PX);
+    for (const draw of pages) draw({ page: doc.addPage([595, 842]), font, png });
+    return doc.save({ useObjectStreams: false });
+  }
+  const textPage = ({ page, font }) => { for (let i = 0; i < 6; i++) page.drawText(LINE, { x: 40, y: 760 - i * 20, size: 10, font }); };
+  const scanPage = ({ page, png }) => page.drawImage(png, { x: 0, y: 0, width: 595, height: 842 });
+  const pdfOf = async (...pages) => new File([await makePdf(pages)], 'caso.pdf');
+  const fixtureFile = (name) => new File([readFileSync(`tests/fixtures/${name}`)], 'caso.pdf');
+  const reduceBox = () => document.querySelector('.xp-reduce input');
+
+  // Carga el PDF en Expediente y responde la contraseña de lectura si la pide («Reducir tamaño» queda como viene).
+  async function load(user, file, { password } = {}) {
+    render(<App />);
+    await goToTools(user);
+    await user.click(screen.getByRole('button', { name: 'Expediente' }));
+    fireEvent.change(document.querySelector('input[type="file"][accept^=".pdf"]'), { target: { files: [file] } });
+    if (password) {
+      await waitFor(() => expect(document.querySelector('dialog').hasAttribute('open')).toBe(true), { timeout: 8000 });
+      await user.type(document.querySelector('dialog input'), `${password}{Enter}`);
+    }
+    await waitFor(() => expect(document.querySelector('.xp-pre')).toBeTruthy(), { timeout: 8000 });
+    const ack = screen.queryByLabelText(/Entiendo, continuar/);
+    if (ack) await user.click(ack);
+  }
+  const descargar = (user) => user.click(screen.getByRole('button', { name: 'Descargar' }));
+  const receipt = () => document.querySelector('.dl-receipt')?.textContent ?? '';
+  const pairDone = () => waitFor(() => expect(downloads).toHaveLength(2), { timeout: DICTIONARY_DELAY + 8000 });
+  const fallback = () => document.querySelector('.dl-fallback')?.textContent ?? null;
+  const pdfName = () => expect(downloads[0]).toMatch(new RegExp(`^documento-${CODE}_protegido\\.pdf$`));
+  const captureBlobs = () => { const blobs = []; URL.createObjectURL = vi.fn((b) => { blobs.push(b); return 'blob:prueba'; }); return blobs; };
+  const pdfTextOf = async (blob) => {
+    const { readPdfPages } = await import('../src/model/expediente/pdfjs.js');
+    const pages = await readPdfPages(new Uint8Array(await blob.arrayBuffer()));
+    return pages.flatMap((p) => p.lines.map((l) => (typeof l === 'string' ? l : l.text ?? ''))).join(' ');
+  };
+
+  it('texto: «Preparando» enseguida en la región aria-live, luego el PDF con diseño sin el dato real', async () => {
+    const user = userEvent.setup();
+    useEngine();
+    const blobs = captureBlobs();
+    await load(user, await pdfOf(textPage));
+    fireEvent.click(screen.getByRole('button', { name: 'Descargar' }));
+    // En el mismo tick del clic, antes de cualquier await (R9: < 200 ms).
+    const live = document.querySelector('.dl-receipt');
+    expect(live?.getAttribute('aria-live')).toBe('polite');
+    expect(live.textContent).toContain(LAYOUT_PREPARING);
+    await pairDone();
+    pdfName();
+    expect(receipt()).toContain(LAYOUT_OK);
+    expect(fallback()).toBeNull();
+    expect(document.querySelector('.dl-images')).toBeNull();
+    const text = await pdfTextOf(blobs[0]);
+    expect(text).not.toContain('Ana María Pérez Gómez');
+    expect(text).not.toContain('1.047.123.456');
+    expect(text).toMatch(/\[PERSONA_1\]/);
+    expect(text).toContain('Cartagena');
+  }, 40000);
+
+  it('«Reducir tamaño» marcado: un dato que solo sale en el encabezado también va al diccionario del PDF con diseño', async () => {
+    const user = userEvent.setup();
+    useEngine();
+    const blobs = captureBlobs();
+    const HEADER = 'Apoderado: Carlos Andrés Ruiz Torres, cédula 73.555.111';
+    const withHeader = ({ page, font }) => { page.drawText(HEADER, { x: 40, y: 810, size: 9, font }); textPage({ page, font }); };
+    await load(user, await pdfOf(withHeader, withHeader, withHeader));
+    expect(reduceBox().checked).toBe(true);
+    expect(document.querySelector('.xp-pre').textContent).not.toContain('73.555.111'); // el encabezado salió del texto
+    await descargar(user);
+    await pairDone();
+    expect(receipt()).toContain(LAYOUT_OK);
+    expect(await pdfTextOf(blobs[0])).not.toContain('73.555.111');
+    const dict = JSON.parse(await blobs[1].text());
+    expect(Object.values(dict)).toContain('73.555.111');
+  }, 40000);
+
+  it('un segundo clic mientras se prepara no descarga dos veces', async () => {
+    const user = userEvent.setup();
+    useEngine();
+    await load(user, await pdfOf(textPage));
+    fireEvent.click(screen.getByRole('button', { name: 'Descargar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Descargar' }));
+    await pairDone();
+    await new Promise((r) => setTimeout(r, DICTIONARY_DELAY + 500));
+    expect(downloads).toHaveLength(2);
+  }, 40000);
+
+  it('página con imagen y texto: PDF con diseño y aviso de revisar esa página', async () => {
+    const user = userEvent.setup();
+    useEngine();
+    const logo = ({ page, png, font }) => { page.drawImage(png, { x: 40, y: 790, width: 80, height: 40 }); textPage({ page, font }); };
+    await load(user, await pdfOf(textPage, logo));
+    await descargar(user);
+    await pairDone();
+    expect(receipt()).toContain(LAYOUT_OK);
+    expect(document.querySelector('.dl-images').textContent).toMatch(/1 página tiene imágenes \(página 2\)/);
+  }, 40000);
+
+  it('página escaneada → PDF de texto con el aviso que nombra la página', async () => {
+    const user = userEvent.setup();
+    useEngine();
+    await load(user, await pdfOf(textPage, scanPage));
+    await descargar(user);
+    await pairDone();
+    pdfName();
+    expect(receipt()).not.toContain(LAYOUT_OK);
+    expect(fallback()).toBe(LAYOUT_FALLBACK.scan([2]));
+  }, 40000);
+
+  it('dato partido entre dos líneas → PDF de texto con el aviso missed-value', async () => {
+    const user = userEvent.setup();
+    useEngine();
+    await load(user, fixtureFile('valor_partido_sintetico.pdf'));
+    await descargar(user);
+    await pairDone();
+    pdfName();
+    expect(fallback()).toBe(LAYOUT_FALLBACK['missed-value']);
+  }, 40000);
+
+  it('el motor no carga (sin build) → PDF de texto con el aviso engine', async () => {
+    const user = userEvent.setup();
+    await load(user, await pdfOf(textPage));
+    await descargar(user);
+    await pairDone();
+    pdfName();
+    expect(fallback()).toBe(LAYOUT_FALLBACK.engine);
+  }, 40000);
+
+  it('archivo demasiado grande para el motor → aviso too-large', async () => {
+    const user = userEvent.setup();
+    useEngine({ fault: { open: Object.assign(new Error('grande'), { code: 'too-large' }) } });
+    await load(user, await pdfOf(textPage));
+    await descargar(user);
+    await pairDone();
+    expect(fallback()).toBe(LAYOUT_FALLBACK['too-large']);
+  }, 40000);
+
+  it('fallo inesperado del motor → aviso error', async () => {
+    const user = userEvent.setup();
+    useEngine({ fault: { pageStats: new Error('roto') } });
+    await load(user, await pdfOf(textPage));
+    await descargar(user);
+    await pairDone();
+    expect(fallback()).toBe(LAYOUT_FALLBACK.error);
+  }, 40000);
+
+  it('«Reducir tamaño» desmarcado tampoco cambia el PDF: sale con su diseño original', async () => {
+    const user = userEvent.setup();
+    useEngine();
+    await load(user, await pdfOf(textPage));
+    expect(reduceBox().checked).toBe(true);
+    await user.click(reduceBox());
+    expect(reduceBox().checked).toBe(false);
+    // Desmarcar vuelve a anonimizar el texto; «Descargar» espera a que termine.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Descargar' }).disabled).toBe(false), { timeout: 8000 });
+    await descargar(user);
+    await pairDone();
+    pdfName();
+    expect(fallback()).toBeNull();
+    expect(receipt()).toContain(LAYOUT_OK);
+  }, 40000);
+
+  it('«Solo marcados» da el PDF de texto sin aviso y sin cargar el motor', async () => {
+    const user = userEvent.setup();
+    useEngine();
+    const loadSpy = vi.spyOn(engine, 'load');
+    await load(user, await pdfOf(textPage));
+    await user.type(screen.getByLabelText('Buscar en todo el expediente'), 'Cartagena');
+    const mark = await screen.findAllByLabelText(/^Marcar pasaje/, {}, { timeout: 4000 });
+    await user.click(mark[0]);
+    await user.click(screen.getByRole('button', { name: /Solo marcados \(1\)/ }));
+    await descargar(user);
+    await pairDone();
+    pdfName();
+    expect(fallback()).toBeNull();
+    expect(receipt()).not.toContain(LAYOUT_OK);
+    expect(loadSpy).not.toHaveBeenCalled();
+  }, 40000);
+
+  describe('PDF con contraseña: se pide otra vez (ADR-007)', () => {
+    const dialogOpen = () => document.querySelector('dialog').hasAttribute('open');
+    const startLayout = async (user) => {
+      useEngine();
+      await load(user, fixtureFile('contrasena_usuario_sintetico.pdf'), { password: PASSWORD });
+      await waitFor(() => expect(dialogOpen()).toBe(false));
+      await descargar(user);
+      await waitFor(() => expect(dialogOpen()).toBe(true), { timeout: 8000 });
+      expect(document.querySelector('dialog').textContent).toContain('Escríbala otra vez');
+    };
+
+    it('la contraseña correcta da el PDF con diseño y cierra el diálogo', async () => {
+      const user = userEvent.setup();
+      await startLayout(user);
+      await user.type(document.querySelector('dialog input'), `${PASSWORD}{Enter}`);
+      await pairDone();
+      expect(dialogOpen()).toBe(false);
+      expect(fallback()).toBeNull();
+      expect(receipt()).toContain(LAYOUT_OK);
+    }, 40000);
+
+    it('una contraseña equivocada la pide de nuevo como incorrecta', async () => {
+      const user = userEvent.setup();
+      await startLayout(user);
+      await user.type(document.querySelector('dialog input'), 'otra{Enter}');
+      await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('Contraseña incorrecta'), { timeout: 8000 });
+      expect(dialogOpen()).toBe(true);
+      expect(downloads).toHaveLength(0);
+      await user.clear(document.querySelector('dialog input'));
+      await user.type(document.querySelector('dialog input'), `${PASSWORD}{Enter}`);
+      await pairDone();
+      expect(receipt()).toContain(LAYOUT_OK);
+    }, 40000);
+
+    it('Cancelar da el PDF de texto con el aviso password-cancel y deja el expediente abierto', async () => {
+      const user = userEvent.setup();
+      await startLayout(user);
+      await user.click(within(document.querySelector('dialog')).getByRole('button', { name: 'Cancelar' }));
+      await pairDone();
+      pdfName();
+      expect(fallback()).toBe(LAYOUT_FALLBACK['password-cancel']);
+      expect(document.querySelector('.xp-pre')).toBeTruthy();
+    }, 40000);
+  });
 });
