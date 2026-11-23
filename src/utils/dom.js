@@ -7,7 +7,7 @@ export function flashElement(el) {
   setTimeout(() => el.classList.remove('flash'), 1200);
 }
 
-const plainRect = (r) => ({ left: r.left, top: r.top, bottom: r.bottom });
+export const plainRect = (r) => ({ left: r.left, top: r.top, bottom: r.bottom });
 const isAlnum = (ch) => !!ch && /[\p{L}\p{N}]/u.test(ch);
 
 function wordAt(x, y, cell) {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import FileButton from '../../components/FileButton.jsx';
 import Segmented from '../../components/Segmented.jsx';
-import { pickFromPointer } from '../../utils/dom.js';
+import { pickFromPointer, plainRect } from '../../utils/dom.js';
 import { COMPACT_QUERY, TOUCH_QUERY, useMediaQuery } from '../../utils/useMediaQuery.js';
 import ParagraphRow from './ParagraphRow.jsx';
 
@@ -56,6 +56,15 @@ export default function ComparisonSheet({ vm }) {
     }, 0);
   };
 
+  const onKeyDown = (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const el = e.target.closest?.('.cell.orig .ent');
+    if (!el) return;
+    e.preventDefault();
+    if (e.repeat) return;
+    vm.actions.openPopover({ kind: 'entity', entityId: el.dataset.e, key: el.dataset.k, rect: plainRect(el.getBoundingClientRect()), returnFocus: el });
+  };
+
   useEffect(() => {
     if (!touch) return undefined;
     let timer;
@@ -90,7 +99,7 @@ export default function ComparisonSheet({ vm }) {
           <div>Lo que verá la IA</div>
         </div>
       </div>
-      <div ref={body} onMouseUp={onMouseUp}>
+      <div ref={body} onMouseUp={onMouseUp} onKeyDown={onKeyDown}>
         {vm.rows.length === 0 && vm.loaded && <div className="empty">No se encontró texto en este documento.</div>}
         {vm.rows.map((row) => <ParagraphRow key={row.index} row={row} />)}
       </div>

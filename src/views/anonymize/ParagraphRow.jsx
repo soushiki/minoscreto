@@ -13,6 +13,9 @@ function OriginalText({ row }) {
       if (!o.active) classes.push('off');
       data['data-e'] = o.entityId;
       data['data-k'] = o.key;
+      data.role = 'button';
+      data.tabIndex = 0;
+      data['aria-haspopup'] = 'dialog';
     }
     if (hit) {
       classes.push('hit');

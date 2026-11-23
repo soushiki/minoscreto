@@ -72,14 +72,21 @@ function NewValuePopover({ popover, vm }) {
   );
 }
 
+// Se evalúa en cada render para que una prueba pueda definir `showPopover` antes.
+export const supportsPopover = () => typeof HTMLElement !== 'undefined' && 'showPopover' in HTMLElement.prototype;
+
 export default function Popover({ vm }) {
   const { popover } = vm;
   const ref = useRef(null);
   const [position, setPosition] = useState({ left: -9999, top: -9999 });
   const close = vm.actions.closePopover;
+  const native = supportsPopover();
 
   useLayoutEffect(() => {
     if (!popover || !ref.current) return;
+    if (native) {
+      try { if (!ref.current.matches(':popover-open')) ref.current.showPopover(); } catch { /* sin top layer: la ventana sigue como div */ }
+    }
     const { offsetWidth: w, offsetHeight: h } = ref.current;
     const left = Math.min(Math.max(8, popover.rect.left), window.innerWidth - w - 8);
     let top = popover.rect.bottom + 8;
@@ -89,22 +96,45 @@ export default function Popover({ vm }) {
 
   useEffect(() => {
     if (!popover) return undefined;
-    const onDown = (e) => { if (!ref.current?.contains(e.target)) close(); };
+    const el = ref.current;
+    const onToggle = (e) => { if (e.newState === 'closed') close(); };
+    const onDown = (e) => { if (!el?.contains(e.target)) close(); };
     const onKey = (e) => { if (e.key === 'Escape') close(); };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
+    if (native) {
+      el?.addEventListener('toggle', onToggle);
+    } else {
+      document.addEventListener('mousedown', onDown);
+      document.addEventListener('keydown', onKey);
+    }
     window.addEventListener('scroll', close, { passive: true });
     return () => {
+      el?.removeEventListener('toggle', onToggle);
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('scroll', close);
     };
-  }, [popover, close]);
+  }, [popover, close, native]);
+
+  // Abierta con el teclado: el foco entra en la ventana y, al cerrarse, vuelve al valor.
+  useEffect(() => {
+    const back = popover?.returnFocus;
+    if (!back) return undefined;
+    ref.current?.querySelector('button, select, input, [tabindex]')?.focus({ preventScroll: true });
+    // Espacio abre con keydown y activa un botón con keyup: se descarta el keyup que sigue a la apertura.
+    const eatSpace = (e) => { if (e.key === ' ') e.preventDefault(); };
+    document.addEventListener('keyup', eatSpace, { capture: true, once: true });
+    const timer = setTimeout(() => document.removeEventListener('keyup', eatSpace, { capture: true }), 400);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('keyup', eatSpace, { capture: true });
+      if (back.isConnected) back.focus({ preventScroll: true });
+    };
+  }, [popover]);
 
   if (!popover) return null;
   const key = popover.kind === 'entity' ? `${popover.entityId}:${popover.key}` : `new:${popover.text}`;
   return (
-    <div ref={ref} className="pop" role="dialog" aria-label="Anonimizar" style={position}>
+    <div ref={ref} className="pop" role="dialog" aria-label="Anonimizar" style={position} popover={native ? 'auto' : undefined}>
       {popover.kind === 'entity'
         ? <EntityPopover key={key} popover={popover} vm={vm} />
         : <NewValuePopover key={key} popover={popover} vm={vm} />}
