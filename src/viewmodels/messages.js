@@ -22,3 +22,19 @@ export const LAYOUT_FALLBACK = Object.freeze({
   error: `No se pudo hacer el PDF con diseño. ${TEXT_PDF}`,
   'password-cancel': `Sin la contraseña no se puede hacer el PDF con diseño. ${TEXT_PDF}`
 });
+
+// PDF restaurado con su diseño original (R7, R8; T14): lo que se lee bajo el botón de descargar (aria-live).
+export const RESTORE_PREPARING = 'Preparando el PDF restaurado con su diseño original…';
+export const restoreProgress = (done, total) => `Preparando el PDF restaurado con su diseño original: página ${done} de ${total}…`;
+export const RESTORE_LAYOUT_OK = 'PDF restaurado con su diseño original.';
+
+const RESTORED_TEXT_PDF = 'Se descargó el PDF restaurado de texto.';
+/** Por qué el PDF restaurado salió sin su diseño: una frase por razón de LayoutRefused, más la cancelación de la contraseña. */
+export const RESTORE_FALLBACK = Object.freeze({
+  scan: (pages = []) => `${pages.length ? `${pages.length === 1 ? 'La página' : 'Las páginas'} ${formatPageRanges(pages)} ${pages.length === 1 ? 'es una imagen escaneada' : 'son imágenes escaneadas'}` : 'El PDF tiene páginas escaneadas'}: su diseño no se puede restaurar. ${RESTORED_TEXT_PDF}`,
+  'missed-value': `Una etiqueta no se pudo cambiar en el PDF con diseño (por ejemplo, partida entre dos líneas). ${RESTORED_TEXT_PDF}`,
+  engine: `El PDF con diseño no se pudo preparar en este navegador. ${RESTORED_TEXT_PDF}`,
+  'too-large': `El archivo es demasiado grande para el PDF con diseño. ${RESTORED_TEXT_PDF}`,
+  error: `No se pudo hacer el PDF restaurado con diseño. ${RESTORED_TEXT_PDF}`,
+  'password-cancel': `Sin la contraseña no se puede hacer el PDF con diseño. ${RESTORED_TEXT_PDF}`
+});

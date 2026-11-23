@@ -51,9 +51,9 @@ describe('ADR-004: engine stays out of the page', () => {
     expect(html).not.toContain('createPdfRuntimeWasm');
   });
 
-  it('index.html stays at most 914 kB gzipped, as Vite reports it (S4; budget raised from 912 by the user 2026-11-23)', () => {
+  it('index.html stays at most 915 kB gzipped, as Vite reports it (S4; budget raised by the user 2026-11-23: 912 → 914, then 915 for T14)', () => {
     expect(reportedGzip).toBeGreaterThan(0);
-    expect(reportedGzip).toBeLessThanOrEqual(914);
+    expect(reportedGzip).toBeLessThanOrEqual(915);
     expect(gzipSync(html, { level: 9 }).length).toBeLessThan(reportedGzip * 1000); // la cifra es de este archivo, no de otro
   });
 

@@ -4,8 +4,9 @@ import { readPdfPages } from '../model/expediente/pdfjs.js';
 import { rejoinTags } from '../model/pdf/rejoin.js';
 import { stripAiHeader, stripPageMarkers } from '../model/expediente/render.js';
 import { usePasswordPrompt } from './usePasswordPrompt.js';
-import { OMITTED_CHARS } from './messages.js';
+import { OMITTED_CHARS, RESTORE_FALLBACK, RESTORE_LAYOUT_OK, RESTORE_PREPARING, restoreProgress } from './messages.js';
 
+const now = () => performance.now();
 const isPdf = (name) => /\.pdf$/i.test(name);
 const lineText = (line) => (typeof line === 'string' ? line : line.text);
 // El pie «Página n de N» que pone nuestro escritor (C4) no es texto del documento: el PDF restaurado lleva el suyo.
@@ -13,9 +14,13 @@ const OUR_FOOTER = /^\s*Página \d+ de \d+\s*$/;
 const withoutOurFooter = (lines) => (lines.length && OUR_FOOTER.test(lines[lines.length - 1]) ? lines.slice(0, -1) : lines);
 
 // PDF → texto (C1). Solo depende del archivo: se lee (y se pide la contraseña) una vez, no al cambiar de diccionario.
+// hadPassword: solo si se preguntó (la contraseña no se guarda, ADR-002); sirve para pedirla otra vez en el PDF con diseño (ADR-007).
 async function readPdfText(buffer, { askPassword, fileName, signal }) {
-  const pages = await readPdfPages(new Uint8Array(buffer), { askPassword, fileName, signal });
-  return pages.map((p) => withoutOurFooter(p.lines.map(lineText)).join('\n')).join('\n');
+  let hadPassword = false;
+  const pages = await readPdfPages(new Uint8Array(buffer), {
+    askPassword: (options) => { hadPassword = true; return askPassword(options); }, fileName, signal
+  });
+  return { text: pages.map((p) => withoutOurFooter(p.lines.map(lineText)).join('\n')).join('\n'), hadPassword };
 }
 
 // Texto del PDF → etiquetas partidas vueltas a unir (C5) → valores reales. Rápido: se repite con cada diccionario.
@@ -46,7 +51,18 @@ export function useRestorer({ save, notify }) {
   const hasDictionary = Boolean(dictionary);
   const deferredText = useDeferredValue(pasted);
   const abortRef = useRef(null);
-  const passwordPrompt = usePasswordPrompt({ onCancel: () => abortRef.current?.abort() });
+  const layoutAbort = useRef(null);
+  const layoutCancelled = useRef(false);
+  const busy = useRef(false);
+  const [layoutStatus, setLayoutStatus] = useState(null);
+  // A quién responde «Cancelar» del diálogo: a la lectura ('read') o al PDF con diseño ('layout', ADR-007).
+  const passwordMode = useRef('read');
+  const passwordPrompt = usePasswordPrompt({
+    onCancel: () => {
+      if (passwordMode.current === 'layout') { layoutCancelled.current = true; layoutAbort.current?.abort(); return; }
+      abortRef.current?.abort();
+    }
+  });
   const { askPassword, close: closePrompt } = passwordPrompt;
 
   const pastedResult = useMemo(
@@ -61,7 +77,7 @@ export function useRestorer({ save, notify }) {
     const controller = new AbortController();
     abortRef.current = controller;
     readPdfText(word.buffer, { askPassword, fileName: word.name, signal: controller.signal })
-      .then((text) => { if (!cancelled) setPdfText({ word, text }); })
+      .then(({ text, hadPassword }) => { if (!cancelled) setPdfText({ word, text, hadPassword }); })
       .catch((error) => {
         if (cancelled) return;
         if (error?.code === 'aborted' || error?.code === 'cancelled') return; // el usuario canceló: sin aviso
@@ -79,6 +95,14 @@ export function useRestorer({ save, notify }) {
       .catch(() => { if (!cancelled) notify('No se pudo procesar el Word.', true); });
     return () => { cancelled = true; };
   }, [word, dictionary, notify]);
+
+  // Otro archivo u otro diccionario: el PDF con diseño en marcha ya no vale; no se descarga nada y el aviso se borra.
+  useEffect(() => () => {
+    layoutAbort.current?.abort();
+    layoutAbort.current = null;
+    passwordMode.current = 'read'; // el «Cancelar» de la próxima lectura vuelve a ser de la lectura
+    setLayoutStatus(null);
+  }, [word, dictionary]);
 
   const wordResult = useMemo(() => {
     if (!word || !dictionary) return null;
@@ -99,7 +123,10 @@ export function useRestorer({ save, notify }) {
     if (!file) return;
     if (!/\.docx$/i.test(file.name) && !isPdf(file.name)) { notify('Sube un Word (.docx) o un PDF.', true); return; }
     try {
-      setWord({ name: file.name, kind: isPdf(file.name) ? 'pdf' : 'docx', buffer: await file.arrayBuffer() });
+      const buffer = await file.arrayBuffer();
+      // pdf.js puede quedarse con el buffer al leerlo: el motor del PDF con diseño abre esta copia.
+      const bytes = isPdf(file.name) ? new Uint8Array(buffer.slice(0)) : null;
+      setWord({ name: file.name, kind: isPdf(file.name) ? 'pdf' : 'docx', buffer, bytes });
       if (!dictionary) notify('Primero elige el diccionario.', true);
     } catch { notify('No se pudo leer el archivo.', true); }
   }, [dictionary, notify]);
@@ -116,34 +143,102 @@ export function useRestorer({ save, notify }) {
     if (await save('texto-restaurado.docx', new Blob([buffer], { type: DOCX_MIME }))) notify('Word guardado.');
   }, [pastedResult, save, notify]);
 
+  /**
+   * PDF restaurado con su diseño original (R7, R8): motor primero (si no carga, sin preguntar nada), la contraseña otra vez
+   * si el archivo la tenía (ADR-007), luego restoreLayout. Responde { bytes }, { fallback: aviso } o 'aborted' (otro archivo
+   * u otro diccionario: no se descarga nada).
+   */
+  const makeLayout = useCallback(async ({ word: source, hadPassword, dict }) => {
+    const controller = new AbortController();
+    layoutAbort.current = controller;
+    layoutCancelled.current = false;
+    const current = () => layoutAbort.current === controller;
+    const stopped = () => (layoutCancelled.current ? { fallback: RESTORE_FALLBACK['password-cancel'] } : 'aborted');
+    try {
+      const { loadEngine } = await import('../model/engine/loader.js');
+      try { await loadEngine(); } catch { return controller.signal.aborted ? 'aborted' : { fallback: RESTORE_FALLBACK.engine }; }
+      if (controller.signal.aborted) return 'aborted';
+      const { restoreLayout } = await import('../model/layout/restore.js');
+      let reason = 'layout';
+      for (;;) {
+        let password = '';
+        if (hadPassword) {
+          passwordMode.current = 'layout';
+          password = await askPassword({ fileName: source.name, reason, signal: controller.signal });
+          if (password === null) return controller.signal.aborted && !layoutCancelled.current ? 'aborted' : { fallback: RESTORE_FALLBACK['password-cancel'] };
+        }
+        let lastPaint = 0;
+        try {
+          const out = await restoreLayout({
+            bytes: source.bytes.slice(), password, dict, signal: controller.signal,
+            onProgress: ({ phase, done, total }) => {
+              if (phase === 'edit' && current() && (done === total || now() - lastPaint > 500)) { lastPaint = now(); setLayoutStatus({ text: restoreProgress(done, total) }); }
+            }
+          });
+          return controller.signal.aborted ? stopped() : out; // cambió el archivo justo al terminar: no se descarga
+        } catch (error) {
+          if (error?.name === 'AbortError' || controller.signal.aborted) return stopped();
+          if (error?.name !== 'LayoutRefused') return { fallback: RESTORE_FALLBACK.error };
+          if (error.where === 'password' && hadPassword) { reason = 'incorrect'; continue; }
+          return { fallback: error.reason === 'scan' ? RESTORE_FALLBACK.scan(error.pages) : (RESTORE_FALLBACK[error.reason] ?? RESTORE_FALLBACK.error) };
+        }
+      }
+    } finally {
+      // Si ya hay otro archivo o diccionario, su diálogo de contraseña no es de este intento.
+      if (current()) {
+        passwordMode.current = 'read';
+        if (hadPassword) closePrompt();
+        layoutAbort.current = null;
+      }
+    }
+  }, [askPassword, closePrompt]);
+
   const downloadRestoredWord = useCallback(async () => {
-    if (!wordResult) return;
+    if (!wordResult || busy.current) return; // un segundo clic mientras se prepara no hace nada
     const pdf = word.kind === 'pdf';
     // FIX-10: el archivo de la IA tiene nombre neutro; el nombre real sale del diccionario (si es uno nuestro).
     const stem = nameFromDictionary(dictionaryName) ?? word.name.replace(/\.(docx|pdf)$/i, '');
     const name = `${stem}-restaurado.${pdf ? 'pdf' : 'docx'}`;
-    let blob = wordResult.blob;
-    let omitted = false;
-    if (pdf) {
-      // FIX-5: el PDF se escribe solo al descargarlo, no con cada cambio de diccionario.
+    if (!pdf) {
+      if (await save(name, wordResult.blob)) notify('Word restaurado guardado.');
+      return;
+    }
+    busy.current = true;
+    setLayoutStatus({ text: RESTORE_PREPARING }); // en el mismo clic, antes de cualquier await (R9)
+    try {
+      const layout = await makeLayout({ word, hadPassword: pdfText?.hadPassword === true, dict: dictionary });
+      if (layout === 'aborted') return;
+      if (layout.bytes) {
+        if (!(await save(name, new Blob([layout.bytes], { type: 'application/pdf' })))) { setLayoutStatus(null); return; }
+        setLayoutStatus({ text: RESTORE_LAYOUT_OK });
+        notify('PDF restaurado guardado.');
+        return;
+      }
+      // Sin diseño: el PDF de texto de siempre. FIX-5: se escribe solo al descargarlo, no con cada cambio de diccionario.
+      let blob;
+      let omitted;
       try {
         const { writeTextPdf } = await import('../model/pdf/writer.js'); // ADR-001: pdf-lib solo se carga al escribir
-        const { bytes, dropped } = await writeTextPdf({ lines: wordResult.text.split('\n') });
-        omitted = dropped.length > 0;
-        blob = new Blob([bytes], { type: 'application/pdf' });
+        const written = await writeTextPdf({ lines: wordResult.text.split('\n') });
+        omitted = written.dropped.length > 0;
+        blob = new Blob([written.bytes], { type: 'application/pdf' });
       } catch (error) {
+        setLayoutStatus(null);
         notify(`No se pudo escribir el PDF: ${error.message}`, true);
         return;
       }
+      if (!(await save(name, blob))) { setLayoutStatus(null); return; }
+      setLayoutStatus({ text: layout.fallback, fallback: true });
+      // Un solo aviso a la vez: el de caracteres omitidos pesa más que «guardado».
+      if (omitted) notify(OMITTED_CHARS, true);
+      else notify('PDF restaurado guardado.');
+    } finally {
+      busy.current = false;
     }
-    if (!(await save(name, blob))) return;
-    // Un solo aviso a la vez: el de caracteres omitidos pesa más que «guardado».
-    if (omitted) notify(OMITTED_CHARS, true);
-    else notify(pdf ? 'PDF restaurado guardado.' : 'Word restaurado guardado.');
-  }, [wordResult, word, dictionaryName, save, notify]);
+  }, [wordResult, word, dictionary, dictionaryName, pdfText, makeLayout, save, notify]);
 
   return {
     dictionary, dictionaryName, mode, pasted, word, wordResult, pastedResult,
-    passwordPrompt, setMode, setPasted, loadDictionary, readDictionaryFile, readWordFile, copyText, downloadPastedAsWord, downloadRestoredWord
+    passwordPrompt, layoutStatus, setMode, setPasted, loadDictionary, readDictionaryFile, readWordFile, copyText, downloadPastedAsWord, downloadRestoredWord
   };
 }

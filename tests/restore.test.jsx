@@ -5,6 +5,9 @@ import { readFileSync } from 'node:fs';
 import JSZip from 'jszip';
 import App from '../src/App.jsx';
 import { buildDocx, openDocx } from '../src/model/index.js';
+import { RESTORE_FALLBACK, RESTORE_LAYOUT_OK, RESTORE_PREPARING } from '../src/viewmodels/messages.js';
+import { createPdfRuntime } from '@embedpdf/engine-runtime';
+import { createPdfium } from '../src/engine-worker/pdfium.js';
 
 // pdf.js sin worker real: el mismo montaje que tests/expediente.test.js
 // slowFirstDestroy: la primera lectura tarda en fallar tras abortarla, como un pdf.js ocupado (carrera con la lectura nueva).
@@ -32,6 +35,14 @@ const writes = vi.hoisted(() => ({ count: 0 }));
 vi.mock('../src/model/pdf/writer.js', async (importOriginal) => {
   const real = await importOriginal();
   return { ...real, writeTextPdf: (...args) => { writes.count += 1; return real.writeTextPdf(...args); } };
+});
+
+// T14: el motor del PDF con diseño. Sin `engine.load` el cargador real falla (ENGINE es null fuera del build) →
+// PDF restaurado de texto con el aviso «engine». Con `engine.load`, PDFium real en el mismo proceso.
+const engine = vi.hoisted(() => ({ load: null }));
+vi.mock('../src/model/engine/loader.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, loadEngine: (...args) => (engine.load ? engine.load(...args) : actual.loadEngine(...args)) };
 });
 
 const DICT = {
@@ -84,7 +95,7 @@ beforeEach(() => {
   URL.revokeObjectURL = vi.fn();
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function click() { saved[saved.length - 1].name = this.download; });
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { engine.load = null; cleanup(); vi.restoreAllMocks(); });
 
 describe('Restaurar: pestaña Archivo con .pdf (T10: R3, R5)', () => {
   it('la pestaña «Word» ahora se llama «Archivo» y acepta .docx y .pdf', async () => {
@@ -278,4 +289,166 @@ describe('Restaurar: pestaña Archivo con .pdf (T10: R3, R5)', () => {
     const doc = await openDocx(await toBytes(saved[0].blob));
     expect(doc.paragraphs.map((p) => p.text).join('\n')).toContain('Según Ana Gómez y Acme SAS.');
   }, 20000);
+});
+
+describe('PDF restaurado con diseño (T14)', () => {
+  const AI_DICT = JSON.parse(readFileSync('tests/fixtures/respuesta_ia_sintetico.json', 'utf8'));
+  const AI_VALUES = ['Ana María Pérez Gómez', 'Pedro Núñez Castaño', 'Construcciones Bahía S.A.S.'];
+  const TAG = /\[(PERSONA|EMPRESA|DIRECCION|CEDULA|TELEFONO|NIT)_\d\]/;
+  const PASSWORD = 'minoscreto-prueba';
+  let runtime;
+  beforeAll(async () => { runtime = await createPdfRuntime({ prefer: 'wasm' }); }, 30000);
+
+  // Cliente como el del cargador, sobre PDFium en el mismo proceso; `fault` hace fallar un método.
+  function useEngine({ fault = {} } = {}) {
+    const pdfium = createPdfium(runtime);
+    const run = (name, fn) => async (...args) => { if (fault[name]) throw fault[name]; return fn(...args); };
+    const client = {
+      open: run('open', (bytes, password) => pdfium.open(new Uint8Array(bytes), password)),
+      pageStats: run('pageStats', (p) => pdfium.pageStats(p)),
+      editPage: run('editPage', (p, options) => pdfium.editPage(p, options)),
+      save: run('save', () => pdfium.save()),
+      close: run('close', () => pdfium.close()),
+      alive: true
+    };
+    engine.load = async () => client;
+  }
+  const status = () => document.querySelector('.rs-status');
+  const collapse = (text) => text.replace(/\s+/g, ' ');
+  const aiPdf = () => fixture('respuesta_ia_sintetico');
+
+  it('muestra «Preparando» al instante en la región aria-live, guarda el PDF con diseño y no escribe el de texto', async () => {
+    const user = userEvent.setup();
+    useEngine();
+    await openRestore(user, AI_DICT);
+    upload(aiPdf());
+    const button = await downloadButton();
+    writes.count = 0;
+    fireEvent.click(button);
+    expect(status().getAttribute('aria-live')).toBe('polite');
+    expect(status().textContent).toBe(RESTORE_PREPARING); // en el mismo tick del clic
+    await waitFor(() => expect(saved).toHaveLength(1), { timeout: 15000 });
+    expect(saved[0].name).toBe('respuesta_ia_sintetico-restaurado.pdf');
+    const text = collapse(await textOf(saved[0].blob));
+    for (const v of AI_VALUES) expect(text).toContain(v);
+    expect(text).not.toMatch(TAG);
+    await waitFor(() => expect(status().textContent).toBe(RESTORE_LAYOUT_OK));
+    expect(status().classList.contains('rs-fallback')).toBe(false);
+    expect(writes.count).toBe(0);
+  }, 40000);
+
+  it('una etiqueta que no se pudo cambiar: PDF de texto con los valores reales y el aviso missed-value', async () => {
+    const user = userEvent.setup();
+    useEngine();
+    await openRestore(user);
+    upload(fixture('etiquetas_fin_de_linea_sintetico'));
+    await user.click(await downloadButton());
+    await waitFor(() => expect(saved).toHaveLength(1), { timeout: 15000 });
+    expect(saved[0].name).toBe('etiquetas_fin_de_linea_sintetico-restaurado.pdf');
+    const text = await textOf(saved[0].blob);
+    expect(text).toContain('Acme SAS');
+    expect(text).not.toMatch(TAG);
+    await waitFor(() => expect(status().textContent).toBe(RESTORE_FALLBACK['missed-value']));
+    expect(status().classList.contains('rs-fallback')).toBe(true);
+  }, 40000);
+
+  it('el motor no carga: PDF restaurado de texto y el aviso engine, sin preguntar nada', async () => {
+    const user = userEvent.setup();
+    await openRestore(user, AI_DICT);
+    upload(aiPdf());
+    await user.click(await downloadButton());
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(collapse(await textOf(saved[0].blob))).toContain('Ana María Pérez Gómez');
+    await waitFor(() => expect(status().textContent).toBe(RESTORE_FALLBACK.engine));
+    expect(openDialog()).toBeNull();
+  }, 20000);
+
+  it('el motor falla al abrir el PDF: un solo PDF de texto y el aviso engine', async () => {
+    const user = userEvent.setup();
+    useEngine({ fault: { open: Object.assign(new Error('boom'), { code: 'font' }) } });
+    await openRestore(user, AI_DICT);
+    upload(aiPdf());
+    await user.click(await downloadButton());
+    await waitFor(() => expect(saved).toHaveLength(1), { timeout: 15000 });
+    await waitFor(() => expect(status().textContent).toBe(RESTORE_FALLBACK.engine));
+    expect(collapse(await textOf(saved[0].blob))).toContain('Pedro Núñez Castaño');
+  }, 40000);
+
+  it('con el .zip de un expediente como diccionario también sale con diseño y con el nombre real (FIX-10)', async () => {
+    const user = userEvent.setup();
+    useEngine();
+    await openRestore(user, null);
+    const zip = new JSZip();
+    zip.file('Tutela Juan Pérez_diccionario-7F3K.json', JSON.stringify(AI_DICT));
+    zip.file('para-subir-a-la-IA/documento-7F3K_parte-01-de-01.pdf', 'x');
+    const bytes = await zip.generateAsync({ type: 'uint8array' });
+    fireEvent.change(document.querySelector('input[type="file"][accept*=".zip"]'), { target: { files: [new File([bytes], 'Tutela Juan Pérez-7F3K.zip')] } });
+    await waitFor(() => expect(document.body.textContent).toContain(`${Object.keys(AI_DICT).length} etiquetas`));
+    await user.click(screen.getByRole('button', { name: 'Archivo' }));
+    upload(new File([readFileSync('tests/fixtures/respuesta_ia_sintetico.pdf')], 'documento-7F3K_parte-01-de-01.pdf', { type: 'application/pdf' }));
+    await user.click(await downloadButton());
+    await waitFor(() => expect(saved).toHaveLength(1), { timeout: 15000 });
+    expect(saved[0].name).toBe('Tutela Juan Pérez-restaurado.pdf');
+    await waitFor(() => expect(status().textContent).toBe(RESTORE_LAYOUT_OK));
+    expect(collapse(await textOf(saved[0].blob))).toContain('Ana María Pérez Gómez');
+  }, 40000);
+
+  describe('PDF con contraseña: se pide otra vez (ADR-007)', () => {
+    const askAgain = async (user) => {
+      useEngine();
+      await openRestore(user);
+      upload(fixture('contrasena_usuario_sintetico'));
+      await waitFor(() => expect(openDialog()).toBeTruthy());
+      await user.type(openDialog().querySelector('input'), `${PASSWORD}{Enter}`);
+      await user.click(await downloadButton());
+      await waitFor(() => expect(openDialog()?.textContent).toContain('Escríbala otra vez'), { timeout: 8000 });
+    };
+
+    it('la contraseña correcta da el PDF con diseño y cierra el diálogo', async () => {
+      const user = userEvent.setup();
+      await askAgain(user);
+      await user.type(openDialog().querySelector('input'), `${PASSWORD}{Enter}`);
+      await waitFor(() => expect(saved).toHaveLength(1), { timeout: 15000 });
+      expect(saved[0].name).toBe('contrasena_usuario_sintetico-restaurado.pdf');
+      await waitFor(() => expect(status().textContent).toBe(RESTORE_LAYOUT_OK));
+      expect(openDialog()).toBeNull();
+      expect(await textOf(saved[0].blob)).not.toMatch(TAG);
+    }, 40000);
+
+    it('Cancelar da el PDF restaurado de texto con el aviso password-cancel', async () => {
+      const user = userEvent.setup();
+      await askAgain(user);
+      await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+      await waitFor(() => expect(saved).toHaveLength(1), { timeout: 15000 });
+      await waitFor(() => expect(status().textContent).toBe(RESTORE_FALLBACK['password-cancel']));
+      expect(openDialog()).toBeNull();
+    }, 40000);
+  });
+
+  it('un segundo clic mientras se prepara no guarda dos veces', async () => {
+    const user = userEvent.setup();
+    useEngine();
+    await openRestore(user, AI_DICT);
+    upload(aiPdf());
+    const button = await downloadButton();
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(saved).toHaveLength(1), { timeout: 15000 });
+    await new Promise((r) => setTimeout(r, 800));
+    expect(saved).toHaveLength(1);
+  }, 40000);
+
+  it('cambiar de diccionario mientras se prepara: no se guarda nada y el aviso se borra', async () => {
+    const user = userEvent.setup();
+    useEngine();
+    await openRestore(user, AI_DICT);
+    upload(aiPdf());
+    fireEvent.click(await downloadButton());
+    expect(status().textContent).toBe(RESTORE_PREPARING);
+    await loadDictionary({ '[PERSONA_1]': 'Otra Persona' }, 'otro.json');
+    await waitFor(() => expect(status().textContent).toBe(''));
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(saved).toHaveLength(0);
+    expect(status().textContent).toBe('');
+  }, 40000);
 });

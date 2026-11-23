@@ -40,6 +40,9 @@ function FromWord({ vm }) {
           {vm.word.kind === 'pdf' ? 'Descargar PDF restaurado' : 'Descargar Word restaurado'}
         </button>
       </div>
+      {vm.word.kind === 'pdf' && (
+        <p className={`rs-status muted${vm.layoutStatus?.fallback ? ' rs-fallback' : ''}`} aria-live="polite">{vm.layoutStatus?.text ?? ''}</p>
+      )}
       <Missing dictionary={vm.dictionary} counts={r.counts} where="el documento" />
     </>
   );
