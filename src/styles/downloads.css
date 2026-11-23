@@ -31,7 +31,7 @@
 }
 
 /* Barra de carga bajo «Preparando…» (descarga protegida y restaurada) */
-.load-bar { display: block; position: relative; overflow: hidden; height: 6px; border-radius: 3px; background: var(--surface2); margin-top: 8px; max-width: 360px; }
+.load-bar { display: block; position: relative; overflow: hidden; height: 6px; border-radius: 3px; background: var(--surface2); margin-top: 8px; }
 .load-bar-fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: inherit; }
 .load-bar.is-determinate .load-bar-fill { transition: width 200ms ease-out; }
 .load-bar.is-indeterminate .load-bar-fill { width: 35%; animation: load-slide 1.4s ease-in-out infinite; }
