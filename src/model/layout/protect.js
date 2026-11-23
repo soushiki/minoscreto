@@ -10,6 +10,7 @@ import { LayoutRefused, refusalFrom } from './errors.js';
 import { readPdfPages } from '../expediente/pdfjs.js';
 import { buildDocument } from '../expediente/document.js';
 import { crossPagePieces } from './crossPage.js';
+import { inTurn } from './turns.js';
 
 /** Tope del archivo de entrada (diseño §Interfaces): más grande es 'too-large' sin cargar el motor. */
 export const MAX_LAYOUT_BYTES = 80 * 1024 * 1024;
@@ -35,24 +36,9 @@ function needlesFor(entities) {
  * @throws {LayoutRefused} o el motivo de `signal` si se cancela (eso no cae al PDF de texto).
  */
 export function protectLayout(options) {
-  // El worker es uno y guarda un solo documento abierto: dos llamadas a la vez (doble clic) se turnan.
-  const run = queue.then(() => protectOnce(options));
-  queue = run.catch(() => {});
-  const signal = options?.signal;
-  if (!signal) return run;
-  // Cancelar mientras espera turno responde ya; el turno, cuando llegue, sale en su primer checkAbort.
-  let onAbort;
-  const aborted = new Promise((_, reject) => {
-    onAbort = () => reject(abortError(signal));
-    if (signal.aborted) onAbort();
-    else signal.addEventListener('abort', onAbort, { once: true });
-  });
-  aborted.catch(() => {});
-  // Una señal que dura mucho (reusada en varias descargas) no acumula oyentes.
-  return Promise.race([run, aborted]).finally(() => signal.removeEventListener('abort', onAbort));
+  // El worker es uno y guarda un solo documento abierto: protect y restore se turnan (turns.js).
+  return inTurn(() => protectOnce(options), options?.signal);
 }
-
-let queue = Promise.resolve();
 
 // Trozos de valores partidos por un salto de folio, por página (T12c). Cualquier fallo da un mapa vacío: la
 // verificación final sigue protegiendo (un valor que no se cambió se rechaza).

@@ -3,6 +3,7 @@
 // Recibe el runtime de EmbedPDF ({ fn, mem }); no sabe nada de mensajes.
 import { findOccurrences, fold } from '../model/text.js';
 import { fixDigitConfusions } from '../model/expediente/ocr.js';
+import { toWinAnsi } from '../model/pdf/winAnsi.js';
 
 const OBJ_TEXT = 1;
 const OBJ_IMAGE = 3;
@@ -240,6 +241,7 @@ export function createPdfium({ fn, mem }) {
     requirePage(index);
     if (poisoned) throw new PdfiumFault('poisoned');
     const needles = checkNeedles(options);
+    const restore = options.mode === 'restore'; // devolver valores en lugar de etiquetas (T13)
     let touched = false;
     const page = fn.FPDF_LoadPage(doc, index);
     if (!page) throw new PdfiumFault('page', String(index));
@@ -277,7 +279,7 @@ export function createPdfium({ fn, mem }) {
       // La compuerta también ve el texto con los 0/1 de OCR corregidos («Gl0ria» → «Gloria», mismo largo): lo que
       // solo se halla ahí también se cambia. Un hallazgo del texto crudo gana sobre uno solapado de la vista corregida.
       const fixedText = fixDigitConfusions(flat.text).text;
-      const views = fixedText.length === flat.text.length && fixedText !== flat.text ? [flat.text, fixedText] : [flat.text];
+      const views = !restore && fixedText.length === flat.text.length && fixedText !== flat.text ? [flat.text, fixedText] : [flat.text];
       const normalList = needles.map((n, id) => ({ id, value: needleText(n.value) })).filter((n) => !needles[n.id].edge);
       const taken = new Uint8Array(flat.text.length);
       const normal = [];
@@ -289,12 +291,11 @@ export function createPdfium({ fn, mem }) {
         }
       }
       normal.sort((a, b) => a.start - b.start);
-      const flatFound = [...normal, ...edgePieces(views, flat.text, needles, normal)].sort((a, b) => a.start - b.start);
+      const flatFound = [...normal, ...(restore ? [] : edgePieces(views, flat.text, needles, normal))].sort((a, b) => a.start - b.start);
       const found = flatFound.map((o) => ({ start: flat.at[o.start], end: flat.at[o.end - 1] + 1, id: o.id }));
       if (!found.length) return { replaced: 0 };
 
       const topLevel = Array.from({ length: fn.FPDFPage_CountObjects(page) }, (_, i) => fn.FPDFPage_GetObject(page, i));
-      const plans = planEdits(found, objOf, count, topLevel, index);
       const style = new Map();
       const styleOf = (obj) => {
         if (!style.has(obj)) {
@@ -325,6 +326,7 @@ export function createPdfium({ fn, mem }) {
         return rects;
       };
 
+      const plans = planEdits(found, objOf, count, topLevel, index, restore ? swallowClipped : undefined);
       // Todo lo que se va a volver a poner se mide antes de borrar: después ya no está.
       for (const plan of plans) {
         plan.seq = [];
@@ -344,6 +346,39 @@ export function createPdfium({ fn, mem }) {
         pushWords(plan.seq, at, plan.end);
         plan.rects = rectsOf(plan.from, plan.end);
       }
+      // Restaurar: la etiqueta de protect puede ser más ancha que su valor y pisar al objeto vecino (ADR-008, TAG_SLACK):
+      // el borrado lo recortaría, así que el tramo lo incluye entero y se vuelve a poner como el resto de la línea.
+      function swallowClipped(plans) {
+        const charBox = (i) => (fn.FPDFText_GetCharBox(textPage, i, d[0], d[1], d[2], d[3]) ? d.map(f64) : null); // left, right, bottom, top
+        for (let n = 0; n < plans.length; n++) {
+          const plan = plans[n];
+          for (let again = true; again;) {
+            again = false;
+            const rects = rectsOf(plan.from, plan.end);
+            const lowest = Math.min(...rects.map(([, top, , bottom]) => Math.min(top, bottom)));
+            for (let k = plan.end; k < count; k++) {
+              if (!objOf[k] || /\s/u.test(chars[k])) continue;
+              const box = charBox(k);
+              if (!box) continue;
+              const [left, right, bottom, top] = box;
+              if (top < lowest) break; // ya en una línea más abajo
+              const hit = rects.some(([l, t, r, b]) => Math.min(right, r) - Math.max(left, l) > 0 && Math.min(top, Math.max(t, b)) - Math.max(bottom, Math.min(t, b)) > 0);
+              if (!hit) continue;
+              let end = k;
+              while (end < count && (objOf[end] === objOf[k] || !objOf[end])) end++;
+              while (end > k && !objOf[end - 1]) end--;
+              plan.end = end;
+              again = true;
+              break;
+            }
+          }
+          while (plans[n + 1] && plans[n + 1].from < plan.end) {
+            const next = plans.splice(n + 1, 1)[0];
+            plan.matches.push(...next.matches);
+            plan.end = Math.max(plan.end, next.end);
+          }
+        }
+      }
       function pushWords(seq, from, to) {
         let word = null;
         for (let k = from; k < to; k++) {
@@ -361,7 +396,7 @@ export function createPdfium({ fn, mem }) {
       const inValue = new Uint8Array(count);
       for (const match of found) inValue.fill(1, match.start, match.end);
       const expected = pageChars(textPage, inValue);
-      for (const match of found) for (const ch of needles[match.id].put) expected.push(ch.codePointAt(0));
+      for (const match of found) for (const ch of needles[match.id].put) if (!restore || !/\s/u.test(ch)) expected.push(ch.codePointAt(0)); // pageChars no cuenta espacios
       fn.FPDFText_ClosePage(textPage);
       textPage = 0;
 
@@ -431,7 +466,10 @@ export function createPdfium({ fn, mem }) {
           const natural = (Math.abs(f32(quad[2], 0) - f32(quad[0], 0)) * Math.hypot(a, b)) || 1;
           const k = Math.max(TAG_MIN_SCALE, Math.min(1, (item.width + item.slack) / natural));
           fn.FPDFPageObj_Transform(obj, k * a, k * b, k * c, k * dd, item.at[0], item.at[1]);
-          if (!fn.FPDFPageObj_SetFillColor(obj, ...TAG_COLOR)) throw new PdfiumFault('font', 'color de etiqueta');
+          // Restaurar: el valor lleva el color del texto que cubre; el verde de nuestras etiquetas pasa a negro.
+          const own = item.style.color;
+          const color = !restore ? TAG_COLOR : own.every((v, i) => v === TAG_COLOR[i]) ? [0, 0, 0, 255] : own;
+          if (!fn.FPDFPageObj_SetFillColor(obj, ...color)) throw new PdfiumFault('font', 'color de etiqueta');
           if (!fn.FPDFTextObj_SetTextRenderMode(obj, item.style.mode)) throw new PdfiumFault('font', 'modo de etiqueta');
           return obj;
         } catch (error) {
@@ -515,8 +553,9 @@ export function createPdfium({ fn, mem }) {
 }
 
 function checkNeedles(options) {
-  if (options?.mode !== 'protect') throw new PdfiumFault('bad-input', 'mode');
+  if (options?.mode !== 'protect' && options?.mode !== 'restore') throw new PdfiumFault('bad-input', 'mode');
   const { needles } = options;
+  if (options.mode === 'restore') return checkRestoreNeedles(needles);
   if (!Array.isArray(needles)) throw new PdfiumFault('bad-input', 'needles');
   const edges = needles.filter((n) => n?.edge !== undefined).length;
   if (needles.length - edges > MAX_NEEDLES || edges > MAX_EDGE_NEEDLES) throw new PdfiumFault('bad-input', 'needles');
@@ -526,6 +565,19 @@ function checkNeedles(options) {
     if (needle.context !== undefined && (needle.edge === undefined || typeof needle.context !== 'string' || needle.context.length > MAX_CONTEXT)) throw new PdfiumFault('bad-input', 'context');
     const bare = needle.edge !== undefined && needle.put === ''; // trozo de un valor partido entre folios: sin etiqueta
     if (typeof needle.put !== 'string' || !(bare || TAG.test(needle.put))) throw new PdfiumFault('bad-input', 'put');
+  }
+  return needles;
+}
+
+// Restaurar (T13): la aguja es una etiqueta conocida y `put` el valor real, en WinAnsi y en una sola línea.
+function checkRestoreNeedles(needles) {
+  if (!Array.isArray(needles) || needles.length > MAX_NEEDLES) throw new PdfiumFault('bad-input', 'needles');
+  for (const needle of needles) {
+    if (typeof needle?.value !== 'string' || !TAG.test(needle.value)) throw new PdfiumFault('bad-input', 'value');
+    if (needle.edge !== undefined) throw new PdfiumFault('bad-input', 'edge');
+    if (needle.context !== undefined) throw new PdfiumFault('bad-input', 'context');
+    const { put } = needle;
+    if (typeof put !== 'string' || !put || put.length > MAX_VALUE || /[\r\n]/.test(put) || toWinAnsi(put).text !== put) throw new PdfiumFault('bad-input', 'put');
   }
   return needles;
 }
@@ -579,7 +631,7 @@ function firstObject(objOf, from, to) {
  * los hallazgos que caen dentro del mismo tramo. Cada tramo lleva sus anclas: el objeto del valor si conserva
  * su comienzo, luego los objetos anteriores de la página, del más cercano al más lejano.
  */
-function planEdits(found, objOf, count, topLevel, index) {
+function planEdits(found, objOf, count, topLevel, index, extend) {
   const plans = [];
   const isTopLevel = new Set(topLevel);
   for (const match of found) {
@@ -598,6 +650,7 @@ function planEdits(found, objOf, count, topLevel, index) {
     }
     plans.push({ from: match.start, end, first, matches: [match] });
   }
+  extend?.(plans);
   const erased = new Uint8Array(count);
   for (const plan of plans) erased.fill(1, plan.from, plan.end);
   for (const plan of plans) {

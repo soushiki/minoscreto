@@ -16,6 +16,7 @@ Todos los datos son inventados. Se regeneran con `python scripts/make-expediente
 | `valor_entre_folios_sintetico.pdf` | pdf-lib (Helvetica), dos páginas, hecha una vez: `Ana María` al final de la página 1 y `Pérez Gómez` al inicio de la 2; el motor borra cada trozo (T12c: el de la página 1 con etiqueta, el de la 2 sin ella) | ninguna |
 | `valor_tres_folios_sintetico.pdf` | pdf-lib (Helvetica), tres páginas, hecha una vez, con un encabezado repetido en cada una: `Ana` al final de la 1, solo `María` en la 2 y `Pérez Gómez` al inicio de la 3; el valor cruza dos saltos, el motor no lo cambia y la verificación lo rechaza (missed-value, R4) | ninguna |
 | `ocr_cero_sintetico.pdf` | pdf-lib (Helvetica), una página, hecha una vez: `Luis Fernando Díaz R0jas` con un cero en vez de la «o» (error de OCR); la compuerta lee `Rojas` (fixDigitConfusions) y el motor también debe cambiarlo | ninguna |
+| `respuesta_ia_sintetico.pdf` | pdf-lib (Helvetica), hecha una vez: respuesta de una IA de 2 páginas con etiquetas en medio de las líneas (una pegada a un punto, una repetida en las dos páginas), una tabla de 3 columnas con una etiqueta por celda, una línea en gris oscuro y un `[PERSONA_N]` genérico que no está en el diccionario. Diccionario en `respuesta_ia_sintetico.json`. Para restaurar con diseño (T13) | ninguna |
 
 Pendiente (las hace el usuario con sus cuentas): exportaciones a PDF de ChatGPT, Claude y Gemini de una respuesta
 sintética, con nombre `<ia>_exportado_sintetico.pdf`.
