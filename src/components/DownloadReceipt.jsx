@@ -1,3 +1,4 @@
+import LoadBar from './LoadBar.jsx';
 import { imagePagesNote, LAYOUT_OK } from '../viewmodels/messages.js';
 
 /**
@@ -10,6 +11,7 @@ export default function DownloadReceipt({ receipt, onDictionaryAgain }) {
     return (
       <div className="dl-receipt" role="status" aria-live="polite">
         <p className="dl-preparing">{receipt.text}</p>
+        <LoadBar done={receipt.done} total={receipt.total} />
       </div>
     );
   }

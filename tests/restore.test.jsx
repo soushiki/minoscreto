@@ -327,12 +327,14 @@ describe('PDF restaurado con diseño (T14)', () => {
     fireEvent.click(button);
     expect(status().getAttribute('aria-live')).toBe('polite');
     expect(status().textContent).toBe(RESTORE_PREPARING); // en el mismo tick del clic
+    expect(document.querySelector('.load-bar')).toBeTruthy();
     await waitFor(() => expect(saved).toHaveLength(1), { timeout: 15000 });
     expect(saved[0].name).toBe('respuesta_ia_sintetico-restaurado.pdf');
     const text = collapse(await textOf(saved[0].blob));
     for (const v of AI_VALUES) expect(text).toContain(v);
     expect(text).not.toMatch(TAG);
     await waitFor(() => expect(status().textContent).toBe(RESTORE_LAYOUT_OK));
+    expect(document.querySelector('.load-bar')).toBeNull();
     expect(status().classList.contains('rs-fallback')).toBe(false);
     expect(writes.count).toBe(0);
   }, 40000);
@@ -349,6 +351,7 @@ describe('PDF restaurado con diseño (T14)', () => {
     expect(text).toContain('Acme SAS');
     expect(text).not.toMatch(TAG);
     await waitFor(() => expect(status().textContent).toBe(RESTORE_FALLBACK['missed-value']));
+    expect(document.querySelector('.load-bar')).toBeNull();
     expect(status().classList.contains('rs-fallback')).toBe(true);
   }, 40000);
 

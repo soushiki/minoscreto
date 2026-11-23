@@ -218,7 +218,7 @@ export function useExpediente({ save, notify }) {
             bytes: original.bytes.slice(), password: pass, entities, signal: controller.signal,
             onProgress: ({ phase, done, total }) => {
               if (phase === 'scan' && !opened) { opened = true; if (original.hadPassword && current()) closePassword(); }
-              if (phase === 'edit' && (done === total || now() - lastPaint > 500)) { lastPaint = now(); prepare(layoutProgress(done, total)); }
+              if (phase === 'edit' && (done === total || now() - lastPaint > 500)) { lastPaint = now(); prepare(layoutProgress(done, total), { done, total }); }
             }
           });
         } catch (error) {

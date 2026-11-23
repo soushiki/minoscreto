@@ -29,9 +29,9 @@ export function useProtectedDownload({ save, notify }) {
    * Antes de una descarga que tarda (PDF con diseño): el texto de espera queda en la lista (aria-live) en el mismo
    * clic, sin esperar nada (R9: «preparando» en menos de 200 ms). Llamarla otra vez cambia el texto (progreso).
    */
-  const prepare = useCallback((text) => {
+  const prepare = useCallback((text, progress) => {
     clearTimeout(timer.current);
-    setReceipt({ kind: 'preparing', text });
+    setReceipt({ kind: 'preparing', text, done: progress?.done, total: progress?.total });
   }, []);
 
   /**

@@ -1,3 +1,5 @@
+import LoadBar from '../../components/LoadBar.jsx';
+
 const limited = (list, n = 12) => `${list.slice(0, n).join(', ')}${list.length > n ? '…' : ''}`;
 
 function Unknown({ list }) {
@@ -41,7 +43,10 @@ function FromWord({ vm }) {
         </button>
       </div>
       {vm.word.kind === 'pdf' && (
-        <p className={`rs-status muted${vm.layoutStatus?.fallback ? ' rs-fallback' : ''}`} aria-live="polite">{vm.layoutStatus?.text ?? ''}</p>
+        <>
+          <p className={`rs-status muted${vm.layoutStatus?.fallback ? ' rs-fallback' : ''}`} aria-live="polite">{vm.layoutStatus?.text ?? ''}</p>
+          {vm.layoutStatus?.busy && <LoadBar done={vm.layoutStatus.done} total={vm.layoutStatus.total} />}
+        </>
       )}
       <Missing dictionary={vm.dictionary} counts={r.counts} where="el documento" />
     </>

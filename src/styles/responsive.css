@@ -73,7 +73,7 @@
   .elin, .drop { min-height: var(--tap); }
 }
 
-@media (prefers-reduced-motion: reduce) { .flash { animation: none; } .cat summary::before { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .flash { animation: none; } .cat summary::before { transition: none; } .load-bar.is-indeterminate { display: none; } .load-bar-fill { transition: none; } }
 
 @media (max-width: 1024px) { .toast { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); } }
 

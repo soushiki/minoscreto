@@ -172,7 +172,7 @@ export function useRestorer({ save, notify }) {
           const out = await restoreLayout({
             bytes: source.bytes.slice(), password, dict, signal: controller.signal,
             onProgress: ({ phase, done, total }) => {
-              if (phase === 'edit' && current() && (done === total || now() - lastPaint > 500)) { lastPaint = now(); setLayoutStatus({ text: restoreProgress(done, total) }); }
+              if (phase === 'edit' && current() && (done === total || now() - lastPaint > 500)) { lastPaint = now(); setLayoutStatus({ text: restoreProgress(done, total), busy: true, done, total }); }
             }
           });
           return controller.signal.aborted ? stopped() : out; // cambió el archivo justo al terminar: no se descarga
@@ -204,7 +204,7 @@ export function useRestorer({ save, notify }) {
       return;
     }
     busy.current = true;
-    setLayoutStatus({ text: RESTORE_PREPARING }); // en el mismo clic, antes de cualquier await (R9)
+    setLayoutStatus({ text: RESTORE_PREPARING, busy: true }); // en el mismo clic, antes de cualquier await (R9)
     try {
       const layout = await makeLayout({ word, hadPassword: pdfText?.hadPassword === true, dict: dictionary });
       if (layout === 'aborted') return;

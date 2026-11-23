@@ -394,9 +394,11 @@ describe('PDF con diseño original (T11)', () => {
     const live = document.querySelector('.dl-receipt');
     expect(live?.getAttribute('aria-live')).toBe('polite');
     expect(live.textContent).toContain(LAYOUT_PREPARING);
+    expect(live.querySelector('.load-bar')).toBeTruthy();
     await pairDone();
     pdfName();
     expect(receipt()).toContain(LAYOUT_OK);
+    expect(document.querySelector('.load-bar')).toBeNull();
     expect(fallback()).toBeNull();
     expect(document.querySelector('.dl-images')).toBeNull();
     const text = await pdfTextOf(blobs[0]);
