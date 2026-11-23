@@ -1,5 +1,5 @@
 /* Modo expediente: misma mesa de trabajo; a la izquierda revisión, a la derecha exportación y vista previa. */
-.xp-solo { max-width: 720px; padding-top: 28px; padding-bottom: 40px; }
+.xp-solo { max-width: 720px; padding-top: 28px; padding-bottom: 88px; }
 .xp-intro h2, .xp-progress h2, .xp-export h2, .xp-preview h2 { font-size: 16px; font-weight: 600; margin-bottom: 4px; overflow-wrap: anywhere; }
 .xp-intro .sub, .xp-progress .sub, .xp-export .sub { color: var(--ink2); font-size: 13px; margin-bottom: 12px; }
 .bar { height: 8px; border-radius: 99px; background: var(--surface2); overflow: hidden; }

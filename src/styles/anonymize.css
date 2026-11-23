@@ -5,7 +5,7 @@
 .note p { flex: 1 1 260px; min-width: 0; }
 
 /* Estructura */
-.layout { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: var(--s5); align-items: start; padding-top: var(--s5); padding-bottom: 40px; }
+.layout { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: var(--s5); align-items: start; padding-top: var(--s5); padding-bottom: 88px; }
 .side { position: sticky; top: calc(var(--top-h) + env(safe-area-inset-top, 0px) + 12px); display: flex; flex-direction: column; gap: var(--s4); max-height: calc(100vh - var(--top-h) - 28px); overflow: auto; min-width: 0; padding-bottom: 2px; }
 .qrow { display: flex; gap: 6px; margin-top: var(--s3); }
 .qrow input { flex: 1; min-width: 0; min-height: var(--tap); padding: 10px var(--s3); border-radius: 8px; border: 1px solid var(--line-strong); background: var(--bg); }

@@ -1,5 +1,5 @@
 /* Restaurar */
-.rs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s6); padding-top: var(--s6); padding-bottom: 40px; align-items: start; }
+.rs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s6); padding-top: var(--s6); padding-bottom: 88px; align-items: start; }
 .rs-col { display: flex; flex-direction: column; gap: var(--s5); min-width: 0; }
 .rs h2 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
 .rs p.sub { color: var(--ink2); font-size: 13px; margin-bottom: 10px; }

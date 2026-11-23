@@ -2,7 +2,7 @@
 button.brand { border: 0; background: none; padding: 4px 6px 4px 0; margin: 0; cursor: pointer; color: inherit; border-radius: 8px; font: inherit; font-weight: 600; font-size: 17px; }
 button.brand:hover span { text-decoration: underline; text-underline-offset: 3px; }
 
-.wl-wrap { max-width: 760px; padding-top: 22px; padding-bottom: 48px; }
+.wl-wrap { max-width: 760px; padding-top: 22px; padding-bottom: 88px; }
 .wl-nav { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; min-height: 40px; }
 .wl-nav .btn { font-size: 15px; padding: 9px 12px; min-height: 44px; }
 .wl-back svg { width: 18px; height: 18px; }
@@ -34,7 +34,7 @@ button.brand:hover span { text-decoration: underline; text-underline-offset: 3px
 
 /* Tableta, o ventana ancha pero baja */
 @media (max-width: 900px), (max-height: 640px) and (max-width: 1280px) {
-  .wl-wrap { padding-top: 14px; padding-bottom: 32px; }
+  .wl-wrap { padding-top: 14px; }
   .wl-card { padding: 22px 22px 24px; }
   .wl h1 { font-size: 24px; }
   .wl h2 { margin-top: 18px; }
@@ -57,7 +57,7 @@ button.brand:hover span { text-decoration: underline; text-underline-offset: 3px
 
 /* Celular horizontal (pantalla baja): menos aire vertical, opciones lado a lado */
 @media (max-height: 480px) and (max-width: 960px) {
-  .wl-wrap { padding-top: 8px; padding-bottom: 20px; }
+  .wl-wrap { padding-top: 8px; }
   .wl-card { padding: 14px 18px 16px; }
   .wl h1 { font-size: 20px; margin-bottom: 6px; }
   .wl h2 { font-size: 17px; margin: 12px 0 8px; }
