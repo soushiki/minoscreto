@@ -1,5 +1,5 @@
 /* Lista de lo descargado: documento y diccionario, con el recordatorio siempre a la vista. */
-.dl-receipt { margin-top: 12px; border: 1.5px solid var(--accent); background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface)); border-radius: 12px; padding: 12px 14px; }
+.dl-receipt { margin-top: var(--s4); border: 1.5px solid var(--accent); background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface)); border-radius: 12px; padding: var(--s4) 20px; }
 .dl-receipt ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 22px; }
 .dl-receipt li { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .dl-receipt li span:last-child { display: flex; flex-direction: column; min-width: 0; }
@@ -7,7 +7,7 @@
 .dl-mark { width: 26px; height: 26px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-weight: 700;
   background: var(--surface2); color: var(--ink2); }
 .dl-mark.ok { background: var(--accent); color: var(--accent-ink); }
-.dl-remind, .dl-layout, .dl-images, .dl-fallback { margin-top: 10px; font-size: 14px; }
+.dl-remind, .dl-layout, .dl-images, .dl-fallback { margin-top: var(--s4); font-size: 14px; }
 .dl-preparing { margin: 0; font-size: 14px; }
 .dl-again { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; font-size: 12.5px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -26,6 +26,6 @@
   .xp-prow { grid-template-columns: 1fr 1fr 1fr; row-gap: 6px; }
   .xp-prow > span:last-child { grid-column: 1 / -1; }
   .xp-prow.hd > span:last-child { display: none; }
-  .xp-copy { width: 100%; min-height: 42px; }
+  .xp-copy { width: 100%; min-height: var(--tap); }
   .xp-parts { max-height: 60vh; }
 }

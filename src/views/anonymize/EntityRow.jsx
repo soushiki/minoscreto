@@ -18,9 +18,11 @@ export default function EntityRow({ entity, vm, onJump }) {
 
   return (
     <div className={`erow t-${entity.type}${entity.enabled ? '' : ' dim'}`}>
-      <input type="checkbox" className="echk" checked={entity.enabled}
-        onChange={() => vm.actions.setEntityEnabled(entity.id, !entity.enabled)}
-        aria-label={`Anonimizar ${entity.value}`} />
+      <label className="tapbox">
+        <input type="checkbox" className="echk" checked={entity.enabled}
+          onChange={() => vm.actions.setEntityEnabled(entity.id, !entity.enabled)}
+          aria-label={`Anonimizar ${entity.value}`} />
+      </label>
       <div>
         <button type="button" className="ejump" onClick={() => onJump(entity.id)} title="Ir a la primera aparición">
           <span className="ev">{entity.value}</span>

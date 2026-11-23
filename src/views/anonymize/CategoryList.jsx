@@ -14,10 +14,12 @@ function Category({ type, entities, open, vm, onJump }) {
   return (
     <details className={`cat t-${type.id}`} open={open} onToggle={(e) => vm.actions.setCategoryOpen(type.id, e.currentTarget.open)}>
       <summary>
-        <input ref={checkbox} type="checkbox" className="catchk" checked={all}
-          aria-label={`Activar o desactivar ${type.name}`}
-          onClick={(e) => e.stopPropagation()}
-          onChange={() => vm.actions.setCategoryEnabled(type.id, !all)} />
+        <label className="tapbox" onClick={(e) => e.stopPropagation()}>
+          <input ref={checkbox} type="checkbox" className="catchk" checked={all}
+            aria-label={`Activar o desactivar ${type.name}`}
+            onClick={(e) => e.stopPropagation()}
+            onChange={() => vm.actions.setCategoryEnabled(type.id, !all)} />
+        </label>
         <span className="cdot" />
         <span className="cname">{type.name}</span>
         <span className="cn">{enabled}/{entities.length}</span>
