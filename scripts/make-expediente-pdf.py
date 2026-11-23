@@ -157,8 +157,93 @@ def make_fixtures():
         print(name, os.path.getsize(out(name)), 'bytes')
 
 
+def _tesseract():
+    for p in (r'C:\Program Files\Tesseract-OCR\tesseract.exe', shutil.which('tesseract')):
+        if p and os.path.exists(p):
+            return p
+    raise SystemExit('No encuentro Tesseract para las fixtures de escaneo')
+
+
+def _page_png(lines, path, letterhead=False, dpi=200):
+    """Página Carta renderizada a PNG en gris: el 'papel' que luego se escanea o se usa de fondo."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=612, height=792)
+    if letterhead:
+        page.draw_rect(pymupdf.Rect(0, 0, 612, 70), color=None, fill=(0.12, 0.28, 0.45))
+        page.draw_rect(pymupdf.Rect(36, 14, 86, 56), color=(1, 1, 1), width=2)
+        page.draw_rect(pymupdf.Rect(0, 760, 612, 792), color=None, fill=(0.85, 0.88, 0.92))
+        page.draw_circle((306, 420), 150, color=(0.93, 0.94, 0.96), width=18)
+    y = 120 if letterhead else 72
+    for line in lines:
+        page.insert_text((72, y), line, fontsize=11, fontname='helv')
+        y += 16
+    pix = page.get_pixmap(dpi=dpi, colorspace=pymupdf.csGRAY)
+    pix.save(path)
+    doc.close()
+
+
+def _image_page(doc, png):
+    page = doc.new_page(width=612, height=792)
+    page.insert_image(page.rect, filename=png)
+    return page
+
+
+def make_scan_fixtures():
+    """Fixtures de calibración de SCAN_RULES (T12). Ver tests/fixtures/README.md."""
+    out = lambda name: os.path.join(FIXTURES, name)  # noqa: E731
+    with tempfile.TemporaryDirectory() as tmp:
+        png = os.path.join(tmp, 'folio.png')
+        _page_png(FIXTURE_LINES, png)
+        # 1. Escaneo sin OCR: solo la imagen de la página.
+        doc = pymupdf.open()
+        _image_page(doc, png)
+        doc.save(out('escaneo_sin_ocr_sintetico.pdf'), garbage=3, deflate=True)
+        doc.close()
+        # 2. Escaneo con OCR de Tesseract (imagen + texto invisible modo 3 en la página).
+        base = os.path.join(tmp, 'ocr')
+        subprocess.run([_tesseract(), png, base, '-l', 'spa', '--dpi', '200', 'pdf'], check=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        shutil.copyfile(base + '.pdf', out('escaneo_ocr_tesseract_sintetico.pdf'))
+        # 3. Como OCRmyPDF (renderizador sandwich): la capa de texto de Tesseract (textonly_pdf) se injerta
+        #    como formulario XObject sobre la página de imagen.
+        layer = os.path.join(tmp, 'capa')
+        subprocess.run([_tesseract(), png, layer, '-l', 'spa', '--dpi', '200', '-c', 'textonly_pdf=1', 'pdf'],
+                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        text_layer = pymupdf.open(layer + '.pdf')
+        doc = pymupdf.open()
+        page = _image_page(doc, png)
+        page.show_pdf_page(page.rect, text_layer, 0, overlay=True)
+        doc.save(out('escaneo_ocrmypdf_estilo_sintetico.pdf'), garbage=3, deflate=True)
+        doc.close()
+        # 4. Escaneo con OCR y un sello/encabezado con texto visible real encima (unas decenas de caracteres).
+        doc = pymupdf.open(base + '.pdf')
+        stamp = doc[0]
+        stamp.insert_text((330, 40), 'RECIBIDO 14 NOV 2026 - JUZGADO 3 CIVIL CTO', fontsize=9, fontname='helv',
+                          color=(0.6, 0, 0))
+        stamp.insert_text((330, 52), 'Folio 1 de 1', fontsize=9, fontname='helv', color=(0.6, 0, 0))
+        doc.save(out('escaneo_ocr_sello_sintetico.pdf'), garbage=3, deflate=True)
+        doc.close()
+        text_layer.close()
+        # 5. Plantilla con membrete: fondo de página completa (imagen) + texto real encima.
+        bg = os.path.join(tmp, 'membrete.png')
+        _page_png([], bg, letterhead=True, dpi=100)
+        doc = pymupdf.open()
+        page = _image_page(doc, bg)
+        y = 120
+        for line in FIXTURE_LINES:
+            page.insert_text((72, y), line, fontsize=11, fontname='helv')
+            y += 16
+        doc.save(out('membrete_sintetico.pdf'), garbage=3, deflate=True)
+        doc.close()
+    for name in sorted(n for n in os.listdir(FIXTURES) if n.startswith(('escaneo_', 'membrete_'))):
+        print(name, os.path.getsize(out(name)), 'bytes')
+
+
 if len(sys.argv) > 1 and sys.argv[1] == '--fixtures':
     make_fixtures()
+    sys.exit(0)
+if len(sys.argv) > 1 and sys.argv[1] == '--scan-fixtures':
+    make_scan_fixtures()
     sys.exit(0)
 
 OUT =sys.argv[1] if len(sys.argv) > 1 else '.local/expediente-600.pdf'

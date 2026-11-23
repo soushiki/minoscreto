@@ -7,6 +7,9 @@ import { scrubPdf } from '../pdf/scrub.js';
 import { classifyPage } from './scan.js';
 import { verifyProtected } from './verify.js';
 import { LayoutRefused, refusalFrom } from './errors.js';
+import { readPdfPages } from '../expediente/pdfjs.js';
+import { buildDocument } from '../expediente/document.js';
+import { crossPagePieces } from './crossPage.js';
 
 /** Tope del archivo de entrada (diseño §Interfaces): más grande es 'too-large' sin cargar el motor. */
 export const MAX_LAYOUT_BYTES = 80 * 1024 * 1024;
@@ -51,6 +54,33 @@ export function protectLayout(options) {
 
 let queue = Promise.resolve();
 
+// Trozos de valores partidos por un salto de folio, por página (T12c). Cualquier fallo da un mapa vacío: la
+// verificación final sigue protegiendo (un valor que no se cambió se rechaza).
+async function crossPageOf(bytes, password, needles) {
+  try {
+    let asked = false;
+    const askPassword = async () => (asked ? null : ((asked = true), password));
+    const pages = await readPdfPages(bytes.slice(), { askPassword });
+    // La compuerta lee el texto con y sin la corrección de 0/1 del OCR: se unen los trozos de las dos lecturas.
+    const merged = new Map();
+    const seen = new Set();
+    for (const options of [{ fixOcr: false }, {}]) {
+      for (const [page, list] of crossPagePieces(buildDocument(pages, options).paragraphs, needles)) {
+        for (const piece of list) {
+          const key = `${page}|${piece.edge}|${piece.put}|${piece.context}|${piece.value}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          if (!merged.has(page)) merged.set(page, []);
+          merged.get(page).push(piece);
+        }
+      }
+    }
+    return merged;
+  } catch {
+    return new Map();
+  }
+}
+
 async function protectOnce({ bytes, password = '', entities, onProgress = () => {}, signal, loadEngine = defaultLoadEngine }) {
   if (!(bytes instanceof Uint8Array) || bytes.length === 0) throw new TypeError('protectLayout: bytes must be a non-empty Uint8Array');
   if (!Array.isArray(entities)) throw new TypeError('protectLayout: entities must be an array');
@@ -86,9 +116,11 @@ async function protectOnce({ bytes, password = '', entities, onProgress = () => 
     }
     if (scans.length) throw new LayoutRefused('scan', { pages: scans });
 
+    const pieces = await crossPageOf(bytes, password, needles);
+    checkAbort(signal);
     for (let p = 0; p < pageCount; p++) {
       checkAbort(signal);
-      await engine.editPage(p, { mode: 'protect', needles });
+      await engine.editPage(p, { mode: 'protect', needles: [...needles, ...(pieces.get(p) ?? [])] });
       onProgress({ phase: 'edit', done: p + 1, total: pageCount });
     }
     checkAbort(signal);

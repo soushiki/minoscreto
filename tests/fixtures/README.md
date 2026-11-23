@@ -12,7 +12,10 @@ Todos los datos son inventados. Se regeneran con `python scripts/make-expediente
 | `tabla_sintetico.pdf` | pdf-lib (Helvetica), 2 páginas: título con valores dentro de la frase y tabla de 7 columnas con bordes, un objeto de texto por celda (como un reporte de semanas cotizadas). Valores en `tabla_sintetico.json` | ninguna |
 | `sucio_sintetico.pdf` | PyMuPDF, 2 páginas, con un valor sembrado (`Laura Patricia Ortega Jiménez`) en Info, XMP, nota y texto libre, campo de formulario, índice, adjunto, JavaScript (Names, OpenAction, AA), StructTreeRoot y PieceInfo; flujos de objetos y una revisión anterior (guardado incremental). Para la limpieza S7 | ninguna |
 | `prosa_sintetico.pdf` | pdf-lib (Helvetica), 6 líneas de un expediente, un objeto de texto por línea con los valores en medio (como Word). Mismos valores de `tabla_sintetico.json` | ninguna |
-| `valor_partido_sintetico.pdf` | pdf-lib (Helvetica), una página, hecha una vez: el nombre `Ana María` / `Pérez Gómez` partido en dos líneas, para que la verificación final encuentre el valor que no se cambió (missed-value) | ninguna |
+| `valor_partido_sintetico.pdf` | pdf-lib (Helvetica), una página, hecha una vez: el nombre `Ana María` / `Pérez Gómez` partido en dos líneas; ahora lo cambia el motor (T12b) | ninguna |
+| `valor_entre_folios_sintetico.pdf` | pdf-lib (Helvetica), dos páginas, hecha una vez: `Ana María` al final de la página 1 y `Pérez Gómez` al inicio de la 2; el motor borra cada trozo (T12c: el de la página 1 con etiqueta, el de la 2 sin ella) | ninguna |
+| `valor_tres_folios_sintetico.pdf` | pdf-lib (Helvetica), tres páginas, hecha una vez, con un encabezado repetido en cada una: `Ana` al final de la 1, solo `María` en la 2 y `Pérez Gómez` al inicio de la 3; el valor cruza dos saltos, el motor no lo cambia y la verificación lo rechaza (missed-value, R4) | ninguna |
+| `ocr_cero_sintetico.pdf` | pdf-lib (Helvetica), una página, hecha una vez: `Luis Fernando Díaz R0jas` con un cero en vez de la «o» (error de OCR); la compuerta lee `Rojas` (fixDigitConfusions) y el motor también debe cambiarlo | ninguna |
 
 Pendiente (las hace el usuario con sus cuentas): exportaciones a PDF de ChatGPT, Claude y Gemini de una respuesta
 sintética, con nombre `<ia>_exportado_sintetico.pdf`.

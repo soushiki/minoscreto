@@ -456,10 +456,32 @@ describe('PDF con diseño original (T11)', () => {
     expect(fallback()).toBe(LAYOUT_FALLBACK.scan([2]));
   }, 40000);
 
-  it('dato partido entre dos líneas → PDF de texto con el aviso missed-value', async () => {
+  it('dato partido entre dos líneas → el motor lo cambia: PDF con diseño y sin aviso (T12b)', async () => {
     const user = userEvent.setup();
     useEngine();
     await load(user, fixtureFile('valor_partido_sintetico.pdf'));
+    await descargar(user);
+    await pairDone();
+    pdfName();
+    expect(receipt()).toContain(LAYOUT_OK);
+    expect(fallback()).toBeNull();
+  }, 40000);
+
+  it('dato partido entre dos páginas → el motor borra los dos trozos: PDF con diseño y sin aviso (T12c)', async () => {
+    const user = userEvent.setup();
+    useEngine();
+    await load(user, fixtureFile('valor_entre_folios_sintetico.pdf'));
+    await descargar(user);
+    await pairDone();
+    pdfName();
+    expect(receipt()).toContain(LAYOUT_OK);
+    expect(fallback()).toBeNull();
+  }, 40000);
+
+  it('dato partido entre tres páginas → PDF de texto con el aviso missed-value', async () => {
+    const user = userEvent.setup();
+    useEngine();
+    await load(user, fixtureFile('valor_tres_folios_sintetico.pdf'));
     await descargar(user);
     await pairDone();
     pdfName();

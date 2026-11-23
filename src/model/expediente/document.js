@@ -45,6 +45,8 @@ export function buildDocument(pages, { reduce = false, fixOcr = true } = {}) {
     let start = 0;
     if (body.length && lastBody && lastBody.endPage === page.number - 1 && continuesOnNextPage(lastBody.text, body[0])) {
       lastBody.text = joinText(lastBody.text, body[0]);
+      // `at`: dónde empieza en el texto unido lo que venía en este folio (joinText deja `b` entero al final).
+      (lastBody.joins ??= []).push({ at: lastBody.text.length - body[0].length, page: page.number });
       lastBody.endPage = page.number;
       pageJoins++;
       start = 1;

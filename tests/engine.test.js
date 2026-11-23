@@ -7,7 +7,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { createPdfRuntime } from '@embedpdf/engine-runtime';
 import { PDFDocument, StandardFonts, rgb, pushGraphicsState, popGraphicsState, setTextRenderingMode, TextRenderingMode, beginText, endText, setFontAndSize, setTextMatrix, showText } from 'pdf-lib';
-import { createPdfium } from '../src/engine-worker/pdfium.js';
+import { createPdfium, flatten } from '../src/engine-worker/pdfium.js';
 import { createWorkerHandler } from '../src/engine-worker/index.js';
 import { createEngineLoader, EngineError } from '../src/model/engine/loader.js';
 
@@ -313,6 +313,71 @@ describe('engine worker: editPage protect + save (T9, ADR-008)', () => {
     expect((await pdfjsLines(out))[0]).toEqual(['Demandante [PERSONA_1] contra', 'gjpqy línea de abajo muy pegada']);
   });
 
+  it('a word split at the line end (prese-/nciado) is re-set with its real hyphen, not PDFium\'s code 2', async () => {
+    const bytes = await onePage((page, font) => {
+      page.drawText('El testigo Ana María Pérez Gómez afirmó haber prese-', { x: 50, y: 700, size: 12, font });
+      page.drawText('nciado la entrega de la mercancía', { x: 50, y: 686, size: 12, font });
+    });
+    const pdfium = createPdfium(runtime);
+    pdfium.open(bytes);
+    expect(pdfium.editPage(0, { mode: 'protect', needles: [{ value: 'Ana María Pérez Gómez', put: '[PERSONA_1]' }] })).toEqual({ replaced: 1 });
+    const out = pdfium.save();
+    pdfium.close();
+    expect((await pdfjsLines(out))[0]).toEqual(['El testigo [PERSONA_1] afirmó haber prese-', 'nciado la entrega de la mercancía']);
+  });
+
+  async function wrapped(lines, value) {
+    const bytes = await onePage((page, font) => {
+      lines.forEach((line, k) => page.drawText(line, { x: 50, y: 700 - 14 * k, size: 12, font }));
+    });
+    const pdfium = createPdfium(runtime);
+    pdfium.open(bytes);
+    const result = pdfium.editPage(0, { mode: 'protect', needles: [{ value, put: '[PERSONA_1]' }] });
+    const out = pdfium.save();
+    pdfium.close();
+    return { result, lines: await pdfjsLines(out) };
+  }
+
+  it('a name wrapped onto the next line (no hyphen) is replaced, tag on line 1, line 2 keeps every char', async () => {
+    const { result, lines } = await wrapped(['El perito declaró Pedro Pablo', 'Henao Vélez que no vio nada', 'línea de abajo gjpqy'], 'Pedro Pablo Henao Vélez');
+    expect(result).toEqual({ replaced: 1 });
+    expect(lines[0]).toEqual(['El perito declaró [PERSONA_1]', 'que no vio nada', 'línea de abajo gjpqy']);
+    expect(lines[0].join('')).not.toMatch(/Pedro|Henao|Vélez/);
+  });
+
+  it('a value hyphenated at the line end (Cár-/denas) is replaced, both pieces gone', async () => {
+    const { result, lines } = await wrapped(['El acta la firmó Juan Cár-', 'denas ante el juez de turno'], 'Juan Cárdenas');
+    expect(result).toEqual({ replaced: 1 });
+    expect(lines[0]).toEqual(['El acta la firmó [PERSONA_1]', 'ante el juez de turno']);
+  });
+
+  it('a compound surname split at its hyphen with an uppercase next line (Gómez-/Pérez) is replaced', async () => {
+    const { result, lines } = await wrapped(['Compareció la señora Lucía Gómez-', 'Pérez declaró bajo juramento', 'otra línea gjpqy'], 'Lucía Gómez-Pérez');
+    expect(result).toEqual({ replaced: 1 });
+    expect(lines[0]).toEqual(['Compareció la señora [PERSONA_1]', 'declaró bajo juramento', 'otra línea gjpqy']);
+  });
+
+  it('flatten: whitespace runs, code-2 hyphen without break, digit hyphen kept, at mapping', () => {
+    const a = flatten([...'ab'], []);
+    expect(a).toEqual({ text: 'ab', at: [0, 1] });
+    const b = flatten(['a', ' ', '\r', '\n', 'b'], []);
+    expect(b).toEqual({ text: 'a b', at: [0, 1, 4] });
+    // código 2 (guion sin salto detrás) entre letra y minúscula: se une
+    const c = flatten([...'Cár', '-', ...'denas'], Uint8Array.from([0, 0, 0, 1, 0, 0, 0, 0, 0]));
+    expect(c.text).toBe('Cárdenas');
+    expect(c.at).toEqual([0, 1, 2, 4, 5, 6, 7, 8]);
+    // guion + salto, cifra delante: se queda el guion y se quita el salto
+    const d = flatten([...'1', '-', '\r', '\n', ...'50'], []);
+    expect(d.text).toBe('1-50');
+    expect(d.at).toEqual([0, 1, 4, 5]);
+    // letra + guion + mayúscula: se queda el guion
+    const e = flatten([...'Gómez', '-', '\r', '\n', ...'Pérez'], []);
+    expect(e.text).toBe('Gómez-Pérez');
+    expect(e.at[5]).toBe(5);
+    // guion en medio de la línea, sin salto: pasa tal cual
+    expect(flatten([...'a-b'], []).text).toBe('a-b');
+  });
+
   it('a heading written later in the stream but drawn higher keeps its stream place (guard; PDFium reads in stream order)', async () => {
     // El encabezado se escribe después en el flujo pero va arriba en la página, y se borra entero.
     const bytes = await onePage((page, font) => {
@@ -382,6 +447,148 @@ describe('engine worker: editPage protect + save (T9, ADR-008)', () => {
       .toThrow(expect.objectContaining({ code: 'page' }));
     expect(pdfium.save()).toBeInstanceOf(Uint8Array); // nada se borró: el documento no queda envenenado
     pdfium.close();
+  });
+
+  // Trozos de un valor partido entre folios (T12c): `edge` 'end' = el último de la página, con etiqueta; 'start' = el primero, sin etiqueta.
+  async function edged(lines, list) {
+    const bytes = await onePage((page, font) => {
+      lines.forEach((line, k) => page.drawText(line, { x: 50, y: 700 - 14 * k, size: 12, font }));
+    });
+    const pdfium = createPdfium(runtime);
+    pdfium.open(bytes);
+    const result = pdfium.editPage(0, { mode: 'protect', needles: list });
+    const out = pdfium.save();
+    pdfium.close();
+    return { result, lines: (await pdfjsLines(out))[0] };
+  }
+
+  it("edge 'end' takes the last occurrence on the page and draws the tag", async () => {
+    const { result, lines } = await edged(['Carlos habló primero. Luego el señor Carlos'], [{ value: 'Carlos', put: '[PERSONA_1]', edge: 'end' }]);
+    expect(result).toEqual({ replaced: 1 });
+    expect(lines).toEqual(['Carlos habló primero. Luego el señor [PERSONA_1]']);
+  });
+
+  it("edge 'start' takes the first occurrence, erases it and draws no tag", async () => {
+    const { result, lines } = await edged(['Andrés Mendoza presentó la demanda. Andrés llegó'], [{ value: 'Andrés', put: '', edge: 'start' }]);
+    expect(result).toEqual({ replaced: 0 });
+    expect(lines).toEqual(['Mendoza presentó la demanda. Andrés llegó']);
+    expect(lines.join('')).not.toContain('[');
+  });
+
+  it('an edge needle skips characters already taken by a normal needle', async () => {
+    const { result, lines } = await edged(['Ana María Pérez firmó y Ana llegó'], [
+      { value: 'Ana María Pérez', put: '[PERSONA_1]' },
+      { value: 'Ana', put: '', edge: 'start' }
+    ]);
+    expect(result).toEqual({ replaced: 1 });
+    expect(lines).toEqual(['[PERSONA_1] firmó y llegó']);
+  });
+
+  it("edge 'end' also erases the hyphen that ends the page (Rí-)", async () => {
+    const { result, lines } = await edged(['Firma de Ana Rí-', 'Página 1 de 2'], [{ value: 'Ana Rí', put: '[PERSONA_1]', edge: 'end' }]);
+    expect(result).toEqual({ replaced: 1 });
+    expect(lines).toEqual(['Firma de [PERSONA_1]', 'Página 1 de 2']); // el pie de página sigue detrás del guion
+  });
+
+  it("edge 'start' with a context skips a header with the same name and erases the tail next to the break", async () => {
+    const { lines } = await edged(['Proceso Pérez Gómez y otros', 'Pérez Gómez presentó la demanda'],
+      [{ value: 'Pérez Gómez', put: '', edge: 'start', context: 'presentó la demanda' }]);
+    expect(lines).toEqual(['Proceso Pérez Gómez y otros', 'presentó la demanda']);
+  });
+
+  it("edge 'end' with a context skips a later signature with the same name", async () => {
+    const { result, lines } = await edged(['firmó la señora Ana', 'Firma: Ana'],
+      [{ value: 'Ana', put: '[PERSONA_1]', edge: 'end', context: 'firmó la señora' }]);
+    expect(result).toEqual({ replaced: 1 });
+    expect(lines).toEqual(['firmó la señora [PERSONA_1]', 'Firma: Ana']);
+  });
+
+  it('a context that matches nowhere erases nothing', async () => {
+    const { result, lines } = await edged(['firmó la señora Ana', 'Firma: Ana'],
+      [{ value: 'Ana', put: '[PERSONA_1]', edge: 'end', context: 'otra frase distinta' }]);
+    expect(result).toEqual({ replaced: 0 });
+    expect(lines).toEqual(['firmó la señora Ana', 'Firma: Ana']);
+  });
+
+  it('a context matches whatever the line breaks and spaces between its words', async () => {
+    const { result, lines } = await edged(['El acta que firmó la', 'señora    Ana'],
+      [{ value: 'Ana', put: '[PERSONA_1]', edge: 'end', context: 'firmó  la señora ' }]);
+    expect(result).toEqual({ replaced: 1 });
+    expect(lines.join(' ')).not.toContain('Ana');
+    const tail = await edged(['Proceso Gómez', 'Gómez presentó', 'la demanda'], [{ value: 'Gómez', put: '', edge: 'start', context: 'presentó la demanda' }]);
+    expect(tail.lines).toEqual(['Proceso Gómez', 'presentó', 'la demanda']);
+  });
+
+  it('a context is compared in the corrected view too (Gl0ria in the context)', async () => {
+    const { result, lines } = await edged(['firmó Gl0ria Ana', 'Firma: Ana'],
+      [{ value: 'Ana', put: '[PERSONA_1]', edge: 'end', context: 'firmó Gloria' }]);
+    expect(result).toEqual({ replaced: 1 });
+    expect(lines).toEqual(['firmó Gl0ria [PERSONA_1]', 'Firma: Ana']);
+  });
+
+  it('edge needles have their own cap (500 per page call); normal needles keep 5000', async () => {
+    const bytes = await onePage((page, font) => page.drawText('Ana', { x: 50, y: 700, size: 12, font }));
+    const pdfium = createPdfium(runtime);
+    pdfium.open(bytes);
+    const edge = (n) => Array.from({ length: n }, (_, i) => ({ value: `Nadie ${i}`, put: '', edge: 'start' }));
+    expect(pdfium.editPage(0, { mode: 'protect', needles: edge(500) })).toEqual({ replaced: 0 });
+    expect(pdfium.editPage(0, { mode: 'protect', needles: [...edge(500), ...Array.from({ length: 5000 }, (_, i) => ({ value: `Otro ${i}`, put: '[A_1]' }))] })).toEqual({ replaced: 0 });
+    expect(() => pdfium.editPage(0, { mode: 'protect', needles: edge(501) })).toThrow(expect.objectContaining({ code: 'bad-input' }));
+    expect(() => pdfium.editPage(0, { mode: 'protect', needles: [{ value: 'Ana', put: '[A_1]', context: 'x' }] })).toThrow(expect.objectContaining({ code: 'bad-input' }));
+    expect(() => pdfium.editPage(0, { mode: 'protect', needles: [{ value: 'Ana', put: '', edge: 'end', context: 'x'.repeat(65) }] })).toThrow(expect.objectContaining({ code: 'bad-input' }));
+    pdfium.close();
+  });
+
+  it('OCR digit typos: «Gl0ria» is matched like the gate sees it (Gloria), tag drawn, nothing left', async () => {
+    const { result, lines } = await edged(['El señor Gl0ria Pérez firmó'], [{ value: 'Gloria Pérez', put: '[PERSONA_1]' }]);
+    expect(result).toEqual({ replaced: 1 });
+    expect(lines).toEqual(['El señor [PERSONA_1] firmó']);
+    expect(lines.join('')).not.toMatch(/Gl0ria|Gloria/);
+  });
+
+  it('a raw match wins over an overlapping match in the corrected view', async () => {
+    // Crudo: «Gl0ria Pérez» no coincide con «Gloria»; sí «Pérez Gómez». Vista corregida: «Gloria Pérez» solapa en «Pérez».
+    const { result, lines } = await edged(['El señor Gl0ria Pérez Gómez firmó'], [
+      { value: 'Pérez Gómez', put: '[PERSONA_2]' },
+      { value: 'Gloria Pérez', put: '[PERSONA_1]' }
+    ]);
+    expect(result).toEqual({ replaced: 1 });
+    expect(lines).toEqual(['El señor Gl0ria [PERSONA_2] firmó']);
+  });
+
+  it('a value mid-line («Ana Pérez Gómez firmó», needle Pérez Gómez) keeps the space after its tag', async () => {
+    const { lines } = await edged(['El señor Ana Pérez Gómez firmó'], [{ value: 'Pérez Gómez', put: '[PERSONA_2]' }]);
+    expect(lines).toEqual(['El señor Ana [PERSONA_2] firmó']);
+  });
+
+  it('an edge piece found only in the corrected view is erased too', async () => {
+    const { result, lines } = await edged(['Firmó Gl0ria y luego Pedro'], [{ value: 'Gloria', put: '[PERSONA_1]', edge: 'end' }]);
+    expect(result).toEqual({ replaced: 1 });
+    expect(lines).toEqual(['Firmó [PERSONA_1] y luego Pedro']);
+  });
+
+  it('checkNeedles: an empty put needs an edge, and the edge must be end or start', async () => {
+    const bytes = await onePage((page, font) => page.drawText('Ana', { x: 50, y: 700, size: 12, font }));
+    const pdfium = createPdfium(runtime);
+    pdfium.open(bytes);
+    for (const bad of [{ value: 'Ana', put: '' }, { value: 'Ana', put: '', edge: 'middle' }, { value: 'Ana', put: '[A_1]', edge: 'x' }, { value: 'Ana', put: 'sin corchetes', edge: 'end' }]) {
+      expect(() => pdfium.editPage(0, { mode: 'protect', needles: [bad] })).toThrow(expect.objectContaining({ code: 'bad-input' }));
+    }
+    pdfium.close();
+  });
+
+  it('a needle joined across a line as «Juan- Pérez» matches the wrap Juan- / Pérez', async () => {
+    const { result, lines } = await wrapped(['Firmó el señor Juan-', 'Pérez ante el juez', 'otra línea gjpqy'], 'Juan- Pérez');
+    expect(result).toEqual({ replaced: 1 });
+    expect(lines[0]).toEqual(['Firmó el señor [PERSONA_1]', 'ante el juez', 'otra línea gjpqy']);
+  });
+
+  it('flatten: an inline soft hyphen between two letters is dropped (and mapped), one at a line break is not', () => {
+    const shy = String.fromCharCode(0xad);
+    const a = flatten(['M', 'a', shy, 'r', 'í', 'a'], []);
+    expect(a.text).toBe('María');
+    expect(a.at).toEqual([0, 1, 3, 4, 5]);
+    expect(flatten(['a', shy, ' ', 'b'], []).text).toBe('a' + shy + 'b'.padStart(2, ' '));
   });
 
   it('a page without any value is left as it was', () => {

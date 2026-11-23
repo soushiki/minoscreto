@@ -1,7 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { createPdfRuntime } from '@embedpdf/engine-runtime';
+import { createPdfium } from '../src/engine-worker/pdfium.js';
 import { buildEntities } from '../src/model/index.js';
 import { itemsToLines, findTableHints } from '../src/model/expediente/index.js';
 import { classifyPage, SCAN_RULES } from '../src/model/layout/scan.js';
+
+const fixtures = resolve(__dirname, 'fixtures');
 
 // Fragmentos como los de pdf.js: texto, posición (transform[4], transform[5]), ancho y alto 10.
 const item = (str, x, y, w = str.length * 5) => ({ str, transform: [10, 0, 0, 10, x, y], width: w, height: 10, hasEOL: false });
@@ -79,6 +85,15 @@ describe('revisión de escaneos por página (R5, T6)', () => {
     expect(classifyPage(stats({ visibleChars: limit, imageCoverage: 0.95, hasImages: true }))).toBe('text');
   });
 
+  it('sello visible sobre una capa OCR más grande sigue siendo escaneo (T12)', () => {
+    expect(classifyPage(stats({ visibleChars: 43, invisibleChars: 283, imageCoverage: 1, hasImages: true }))).toBe('scan');
+    expect(classifyPage(stats({ visibleChars: 283, invisibleChars: 283, imageCoverage: 1, hasImages: true }))).toBe('scan');
+    // Texto visible mayor que la capa OCR: texto real (p. ej. plantilla con algo oculto).
+    expect(classifyPage(stats({ visibleChars: 284, invisibleChars: 283, imageCoverage: 1, hasImages: true }))).toBe('text');
+    // Sin imagen de página, la capa invisible no decide nada.
+    expect(classifyPage(stats({ visibleChars: 40, invisibleChars: 500, imageCoverage: 0.5, hasImages: true }))).toBe('text');
+  });
+
   it('imagen que no cubre la página (firma, sello) no hace escaneo', () => {
     const below = SCAN_RULES.minImageCoverage - 0.01;
     expect(classifyPage(stats({ visibleChars: 5, imageCoverage: below, hasImages: true }))).toBe('text');
@@ -91,7 +106,7 @@ describe('revisión de escaneos por página (R5, T6)', () => {
   });
 
   it('los umbrales están en un solo objeto congelado', () => {
-    expect(SCAN_RULES).toEqual({ minVisibleChars: 30, minImageCoverage: 0.9 });
+    expect(SCAN_RULES).toEqual({ minVisibleChars: 30, minImageCoverage: 0.9, ocrOutweighs: true });
     expect(Object.isFrozen(SCAN_RULES)).toBe(true);
   });
 
@@ -100,5 +115,33 @@ describe('revisión de escaneos por página (R5, T6)', () => {
     expect(() => classifyPage(stats({ visibleChars: -1 }))).toThrow(TypeError);
     expect(() => classifyPage(stats({ imageCoverage: Number.NaN }))).toThrow(TypeError);
     expect(() => classifyPage(stats({ visibleChars: '40' }))).toThrow(TypeError);
+  });
+});
+
+// Calibración T12: los umbrales contra páginas reales medidas por PDFium (no números inventados).
+describe('calibración de SCAN_RULES con PDFium (T12)', () => {
+  let pdfium;
+  beforeAll(async () => {
+    pdfium = createPdfium(await createPdfRuntime({ prefer: 'wasm' }));
+  });
+  afterEach(() => pdfium.close());
+
+  const measure = (name) => {
+    const bytes = new Uint8Array(readFileSync(join(fixtures, name)));
+    const { pageCount } = pdfium.open(bytes);
+    return Array.from({ length: pageCount }, (_, i) => pdfium.pageStats(i));
+  };
+
+  it.each([
+    ['escaneo_sin_ocr_sintetico.pdf', 'scan'],
+    ['escaneo_ocr_tesseract_sintetico.pdf', 'scan'],
+    ['escaneo_ocrmypdf_estilo_sintetico.pdf', 'scan'],
+    ['escaneo_ocr_sello_sintetico.pdf', 'scan'],
+    ['membrete_sintetico.pdf', 'text'],
+    ['tabla_sintetico.pdf', 'text'],
+    ['prosa_sintetico.pdf', 'text']
+  ])('%s → %s', (name, expected) => {
+    const pages = measure(name);
+    for (const stats of pages) expect(classifyPage(stats)).toBe(expected);
   });
 });

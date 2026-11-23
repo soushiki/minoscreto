@@ -121,12 +121,41 @@ describe('protectLayout (T10)', () => {
     expect(calls.at(-1)).toBe('close');
   });
 
-  it('value split across lines → missed-value, no bytes', async () => {
+  it('value split across two lines of one page → replaced by the engine (T12b), layout bytes returned', async () => {
+    const { loadEngine } = engineFor();
+    const out = await protectLayout({ bytes: fixture('valor_partido_sintetico.pdf'), entities: ENTITIES, loadEngine });
+    const text = (await pageTexts(out.bytes)).join(' ');
+    expect(text).toContain('[PERSONA_1]');
+    expect(text).not.toMatch(/Pérez Gómez/);
+    expect(await verifyProtected(out.bytes, ENTITIES)).toEqual({ ok: true });
+  });
+
+  it('value split across a page break → each piece erased, tag on the earlier page (T12c), layout bytes returned', async () => {
+    const { loadEngine } = engineFor();
+    const out = await protectLayout({ bytes: fixture('valor_entre_folios_sintetico.pdf'), entities: ENTITIES, loadEngine });
+    const [first, second] = await pageTexts(out.bytes);
+    expect(first).toContain('[PERSONA_1]');
+    expect(first).not.toMatch(/Ana|María/);
+    expect(second).not.toMatch(/Pérez|Gómez/);
+    expect(second).not.toContain('[');
+    expect(await verifyProtected(out.bytes, ENTITIES)).toEqual({ ok: true });
+  });
+
+  it('value split across two page breaks → missed-value, no bytes', async () => {
     const { loadEngine, calls } = engineFor();
-    const error = await refusal(protectLayout({ bytes: fixture('valor_partido_sintetico.pdf'), entities: ENTITIES, loadEngine }));
+    const error = await refusal(protectLayout({ bytes: fixture('valor_tres_folios_sintetico.pdf'), entities: ENTITIES, loadEngine }));
     expect(error).toBeInstanceOf(LayoutRefused);
     expect(error.reason).toBe('missed-value');
     expect(calls).toContain('save');
+  });
+
+  it('a value with an OCR digit typo (R0jas) → replaced as the gate reads it, layout bytes returned', async () => {
+    const { loadEngine } = engineFor();
+    const out = await protectLayout({ bytes: fixture('ocr_cero_sintetico.pdf'), entities: ENTITIES, loadEngine });
+    const text = (await pageTexts(out.bytes)).join(' ');
+    expect(text).toContain('[PERSONA_2]');
+    expect(text).not.toMatch(/R0jas|Rojas|Fernando/);
+    expect(await verifyProtected(out.bytes, ENTITIES)).toEqual({ ok: true });
   });
 
   it('engine that will not load → engine, the input untouched', async () => {

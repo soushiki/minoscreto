@@ -1,7 +1,8 @@
 // Envoltura de PDFium dentro del worker (ADR-005). Es dueña de cada puntero: lo que reserva lo libera en `finally`,
 // y el único que vive entre llamadas es el de los bytes del documento abierto (PDFium los lee mientras está abierto).
 // Recibe el runtime de EmbedPDF ({ fn, mem }); no sabe nada de mensajes.
-import { findOccurrences } from '../model/text.js';
+import { findOccurrences, fold } from '../model/text.js';
+import { fixDigitConfusions } from '../model/expediente/ocr.js';
 
 const OBJ_TEXT = 1;
 const OBJ_IMAGE = 3;
@@ -14,10 +15,14 @@ const SAVE_REMOVE_SECURITY = 3; // FPDF_REMOVE_SECURITY: guardado completo y sin
 const NULL = 0n; // los punteros del runtime son BigInt
 const TAG_COLOR = [13, 92, 74, 255]; // verde oscuro de la marca, como en el PDF de texto
 const TAG_MIN_SCALE = 0.6; // la etiqueta se encoge para caber en el ancho del valor, hasta el 60 % (ADR-008)
-const TAG_SLACK = 6; // puntos de holgura sobre el ancho del valor
+const TAG_SLACK = 6; // puntos de holgura sobre el ancho del valor (si detrás viene un espacio no se usa: ver newTag)
 const TAG = /^\[[\x21-\x5c\x5e-\x7e]{1,60}\]$/; // etiqueta [TIPO_n]: ASCII visible (Helvetica), sin «]» dentro
 const MAX_NEEDLES = 5000;
+const MAX_EDGE_NEEDLES = 500; // trozos de valores partidos entre folios, por página
+const MAX_CONTEXT = 64;
 const MAX_VALUE = 500;
+const LINE_HYPHEN = 2; // PDFium da 2 por el guion «-» con que termina una línea partida (prese-/nciado)
+const HYPHEN = 0x2d;
 
 export class PdfiumFault extends Error {
   constructor(code, detail) {
@@ -25,6 +30,56 @@ export class PdfiumFault extends Error {
     this.name = 'PdfiumFault';
     this.code = code;
   }
+}
+
+const SOFT_HYPHEN = '\u00ad';
+const HYPHENS = new Set(['-', '‐', '¬', SOFT_HYPHEN]);
+
+// Valor de una aguja como se busca en el texto aplanado: espacios en uno, y «Juan- Pérez» (así lo deja joinText
+// tras un salto de línea) como «Juan-Pérez», que es lo que flatten saca de «Juan-» / «Pérez».
+const needleText = (value) => value.replace(/\s+/g, ' ').replace(/(\p{L})- (\p{Lu})/gu, '$1-$2').trim();
+
+/**
+ * Texto de la página sin saltos de línea: cada tramo de espacios (también los \r\n que genera PDFium) es un solo ' ',
+ * y el guion de fin de línea se une o se quita como en joinText (layout.js): letra + guion + minúscula → palabra unida.
+ * `chars`: un texto por carácter de PDFium; `lineHyphen[i]`: PDFium dio el código 2 en i (guion sin salto detrás).
+ * `at[u]`: carácter de PDFium de cada unidad UTF-16 de `text`.
+ * @returns {{ text: string, at: number[] }}
+ */
+export function flatten(chars, lineHyphen = []) {
+  const isSpace = (c) => c !== undefined && /^\s+$/u.test(c);
+  let text = '';
+  const at = [];
+  const put = (s, i) => { text += s; for (let u = 0; u < s.length; u++) at.push(i); };
+  for (let i = 0; i < chars.length; i++) {
+    const c = chars[i];
+    // Un guion blando dentro de una palabra (no en un salto de línea) no se ve: se quita, como en el texto que se verifica.
+    if (c === SOFT_HYPHEN && i > 0 && /\p{L}$/u.test(chars[i - 1]) && chars[i + 1] !== undefined && /^\p{L}/u.test(chars[i + 1])) continue;
+    if (HYPHENS.has(c) && i > 0 && /[\p{L}\p{Nd}]$/u.test(chars[i - 1])) {
+      let k = i + 1;
+      let broken = false;
+      while (isSpace(chars[k])) { if (/[\r\n]/.test(chars[k])) broken = true; k++; }
+      if (lineHyphen[i] || broken) {
+        const next = chars[k];
+        if (/\p{L}$/u.test(chars[i - 1]) && next !== undefined && /^\p{Ll}/u.test(next)) {
+          i = k - 1; // se quita el guion y los espacios: la palabra se une
+        } else {
+          put(c, i);
+          i = k - 1; // se queda el guion, sin los espacios de detrás
+        }
+        continue;
+      }
+    }
+    if (isSpace(c)) {
+      let k = i + 1;
+      while (isSpace(chars[k])) k++;
+      put(' ', i);
+      i = k - 1;
+    } else {
+      put(c, i);
+    }
+  }
+  return { text, at };
 }
 
 export function createPdfium({ fn, mem }) {
@@ -37,6 +92,13 @@ export function createPdfium({ fn, mem }) {
     const ptr = mem.alloc(size);
     if (!ptr) throw new PdfiumFault('too-large', `no hay memoria para ${size} bytes`);
     return ptr;
+  }
+
+  // El carácter i de la página; el guion de fin de línea vuelve a ser «-», el que está en el PDF: así se busca, se
+  // vuelve a escribir y se compara (si no, la palabra se reescribiría con un código 2 que la fuente no tiene).
+  function unicodeAt(textPage, i) {
+    const cp = fn.FPDFText_GetUnicode(textPage, i);
+    return cp === LINE_HYPHEN ? HYPHEN : cp;
   }
 
   function requirePage(index) {
@@ -201,16 +263,34 @@ export function createPdfium({ fn, mem }) {
       if (count <= 0) return { replaced: 0 };
       const objOf = new Array(count);
       const chars = new Array(count); // un texto por carácter de PDFium (dos unidades UTF-16 fuera del plano básico)
-      const charAt = []; // unidad UTF-16 del texto de la página → carácter de PDFium
+      const lineHyphen = new Uint8Array(count); // 1 donde PDFium dio el código 2 (guion de fin de línea)
       for (let i = 0; i < count; i++) {
         objOf[i] = fn.FPDFText_GetTextObject(textPage, i) || 0;
-        const cp = fn.FPDFText_GetUnicode(textPage, i);
+        const raw = fn.FPDFText_GetUnicode(textPage, i);
+        lineHyphen[i] = raw === LINE_HYPHEN ? 1 : 0;
+        const cp = raw === LINE_HYPHEN ? HYPHEN : raw;
         // Lo que no es un carácter válido no es letra ni cifra: no se une a un valor.
         chars[i] = cp > 0 && cp <= 0x10ffff && (cp < 0xd800 || cp > 0xdfff) ? String.fromCodePoint(cp) : '�';
-        for (let u = 0; u < chars[i].length; u++) charAt.push(i);
       }
-      const found = findOccurrences(chars.join(''), needles.map((n, id) => ({ id, value: n.value })))
-        .map((o) => ({ start: charAt[o.start], end: charAt[o.end - 1] + 1, id: o.id }));
+      // Se busca en el texto «aplanado» (un valor puede partirse entre líneas) y se vuelve a los caracteres de PDFium.
+      const flat = flatten(chars, lineHyphen);
+      // La compuerta también ve el texto con los 0/1 de OCR corregidos («Gl0ria» → «Gloria», mismo largo): lo que
+      // solo se halla ahí también se cambia. Un hallazgo del texto crudo gana sobre uno solapado de la vista corregida.
+      const fixedText = fixDigitConfusions(flat.text).text;
+      const views = fixedText.length === flat.text.length && fixedText !== flat.text ? [flat.text, fixedText] : [flat.text];
+      const normalList = needles.map((n, id) => ({ id, value: needleText(n.value) })).filter((n) => !needles[n.id].edge);
+      const taken = new Uint8Array(flat.text.length);
+      const normal = [];
+      for (const view of views) {
+        for (const o of findOccurrences(view, normalList)) {
+          if (taken.subarray(o.start, o.end).includes(1)) continue;
+          taken.fill(1, o.start, o.end);
+          normal.push(o);
+        }
+      }
+      normal.sort((a, b) => a.start - b.start);
+      const flatFound = [...normal, ...edgePieces(views, flat.text, needles, normal)].sort((a, b) => a.start - b.start);
+      const found = flatFound.map((o) => ({ start: flat.at[o.start], end: flat.at[o.end - 1] + 1, id: o.id }));
       if (!found.length) return { replaced: 0 };
 
       const topLevel = Array.from({ length: fn.FPDFPage_CountObjects(page) }, (_, i) => fn.FPDFPage_GetObject(page, i));
@@ -252,8 +332,13 @@ export function createPdfium({ fn, mem }) {
         for (const match of plan.matches) {
           pushWords(plan.seq, at, match.start);
           const first = firstObject(objOf, match.start, match.end);
-          plan.seq.push({ put: needles[match.id].put, at: originOf(match.start), style: styleOf(first),
-            width: extentAlong(styleOf(first).matrix, firstLine(rectsOf(match.start, match.end), index)) });
+          // put '' (trozo de un valor partido entre folios): se borra y no se pone etiqueta.
+          if (needles[match.id].put !== '') {
+            plan.seq.push({ put: needles[match.id].put, at: originOf(match.start), style: styleOf(first),
+              width: extentAlong(styleOf(first).matrix, firstLine(rectsOf(match.start, match.end), index)),
+              // Con un espacio detrás del valor, la etiqueta no pasa de su ancho: si no, pisa el espacio y pdf.js une la palabra siguiente.
+              slack: /\s/u.test(chars[match.end] ?? ' ') ? 0 : TAG_SLACK });
+          }
           at = match.end;
         }
         pushWords(plan.seq, at, plan.end);
@@ -267,7 +352,7 @@ export function createPdfium({ fn, mem }) {
             word = { text: '', at: originOf(k), obj: objOf[k], style: styleOf(objOf[k]) };
             seq.push(word);
           }
-          const cp = fn.FPDFText_GetUnicode(textPage, k);
+          const cp = unicodeAt(textPage, k);
           // Sin Unicode (glifo sin mapa) la palabra no se puede volver a escribir: se rechaza, no se recorta.
           if (!(cp > 0 && cp <= 0x10ffff) || (cp >= 0xd800 && cp <= 0xdfff)) throw new PdfiumFault('font', `glifo sin Unicode en página ${index}`);
           word.text += String.fromCodePoint(cp);
@@ -344,7 +429,7 @@ export function createPdfium({ fn, mem }) {
           // Ancho natural de la etiqueta en la página: medida sin transformar × la escala de la matriz en la dirección
           // del texto (Word pone el tamaño en Tf; LibreOffice, iText o ReportLab a menudo en la matriz).
           const natural = (Math.abs(f32(quad[2], 0) - f32(quad[0], 0)) * Math.hypot(a, b)) || 1;
-          const k = Math.max(TAG_MIN_SCALE, Math.min(1, (item.width + TAG_SLACK) / natural));
+          const k = Math.max(TAG_MIN_SCALE, Math.min(1, (item.width + item.slack) / natural));
           fn.FPDFPageObj_Transform(obj, k * a, k * b, k * c, k * dd, item.at[0], item.at[1]);
           if (!fn.FPDFPageObj_SetFillColor(obj, ...TAG_COLOR)) throw new PdfiumFault('font', 'color de etiqueta');
           if (!fn.FPDFTextObj_SetTextRenderMode(obj, item.style.mode)) throw new PdfiumFault('font', 'modo de etiqueta');
@@ -393,7 +478,7 @@ export function createPdfium({ fn, mem }) {
     const out = [];
     for (let i = 0, n = fn.FPDFText_CountChars(textPage); i < n; i++) {
       if (skip?.[i] || fn.FPDFText_IsGenerated(textPage, i) === 1) continue;
-      const cp = fn.FPDFText_GetUnicode(textPage, i);
+      const cp = unicodeAt(textPage, i);
       if (cp > 0 && cp <= 0x10ffff && /\s/u.test(String.fromCodePoint(cp))) continue;
       out.push(cp);
     }
@@ -432,12 +517,56 @@ export function createPdfium({ fn, mem }) {
 function checkNeedles(options) {
   if (options?.mode !== 'protect') throw new PdfiumFault('bad-input', 'mode');
   const { needles } = options;
-  if (!Array.isArray(needles) || needles.length > MAX_NEEDLES) throw new PdfiumFault('bad-input', 'needles');
+  if (!Array.isArray(needles)) throw new PdfiumFault('bad-input', 'needles');
+  const edges = needles.filter((n) => n?.edge !== undefined).length;
+  if (needles.length - edges > MAX_NEEDLES || edges > MAX_EDGE_NEEDLES) throw new PdfiumFault('bad-input', 'needles');
   for (const needle of needles) {
     if (typeof needle?.value !== 'string' || !needle.value.trim() || needle.value.length > MAX_VALUE) throw new PdfiumFault('bad-input', 'value');
-    if (typeof needle.put !== 'string' || !TAG.test(needle.put)) throw new PdfiumFault('bad-input', 'put');
+    if (needle.edge !== undefined && needle.edge !== 'end' && needle.edge !== 'start') throw new PdfiumFault('bad-input', 'edge');
+    if (needle.context !== undefined && (needle.edge === undefined || typeof needle.context !== 'string' || needle.context.length > MAX_CONTEXT)) throw new PdfiumFault('bad-input', 'context');
+    const bare = needle.edge !== undefined && needle.put === ''; // trozo de un valor partido entre folios: sin etiqueta
+    if (typeof needle.put !== 'string' || !(bare || TAG.test(needle.put))) throw new PdfiumFault('bad-input', 'put');
   }
   return needles;
+}
+
+// Texto para comparar contextos: plegado como findOccurrences, sin ningún espacio ni guion blando (los saltos de
+// línea y espacios del texto del párrafo y de la página no coinciden).
+const squash = (text) => fold(text).replace(/[\s\u00ad]/gu, '');
+
+/**
+ * Trozos de un valor partido entre folios (needles con `edge`), en coordenadas del texto aplanado: solo en lo que
+ * no tomó una aguja normal. Un hallazgo cuenta solo si el texto de al lado coincide con `context` (el del párrafo
+ * unido): para 'end', lo que va antes del hallazgo termina con el contexto; para 'start', lo que va después lo empieza.
+ * Así un encabezado o una firma con el mismo nombre no se borra en lugar del trozo pegado al salto de folio.
+ * 'end' toma el ÚLTIMO hallazgo que cuenta (y el guion de fin de página que lo sigue, como «Rí-»); 'start' el PRIMERO.
+ * Sin ninguno no se borra nada: la verificación lo rechazará.
+ */
+function edgePieces(views, text, needles, taken) {
+  const used = new Uint8Array(text.length);
+  for (const o of taken) used.fill(1, o.start, o.end);
+  const out = [];
+  needles.forEach((needle, id) => {
+    if (!needle.edge) return;
+    const context = squash(needle.context ?? '');
+    let hit;
+    for (const view of views) { // el texto crudo primero; el corregido solo si allí no hay hallazgo que cuente
+      const hits = findOccurrences(view, [{ id, value: needleText(needle.value) }]).filter((o) => {
+        if (used.subarray(o.start, o.end).includes(1)) return false;
+        if (!context) return true;
+        return needle.edge === 'end' ? squash(view.slice(0, o.start)).endsWith(context) : squash(view.slice(o.end)).startsWith(context);
+      });
+      hit = needle.edge === 'end' ? hits.at(-1) : hits[0];
+      if (hit) break;
+    }
+    if (!hit) return;
+    let { end } = hit;
+    // El guion de fin de línea pegado al trozo («Rí-»): flatten lo deja junto a la palabra aunque detrás venga el pie de página.
+    if (needle.edge === 'end' && HYPHENS.has(text[end]) && !used[end]) end += 1;
+    used.fill(1, hit.start, end);
+    out.push({ start: hit.start, end, id });
+  });
+  return out;
 }
 
 function firstObject(objOf, from, to) {
