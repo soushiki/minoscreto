@@ -52,7 +52,7 @@
 .xp-psel { display: flex; gap: 8px; align-items: center; }
 .xp-psel select { min-height: var(--tap); padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--bg); max-width: 100%; }
 .xp-pre { margin: 12px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--doc); font-size: 14.5px; line-height: 1.6;
-  background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; max-height: 70vh; overflow: auto; }
+  background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; max-height: 70dvh; overflow: auto; }
 .xp-folio { font-family: var(--ui); font-size: 12px; color: var(--accent); }
 
 /* Tableta (o ventana baja y ancha): una sola columna, la exportación primero */
@@ -60,11 +60,11 @@
   .layout.xp { grid-template-columns: minmax(0, 1fr); }
   .layout.xp .side { position: static; max-height: none; overflow: visible; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
   .layout.xp .xp-main { order: -1; }
-  .xp-pre { max-height: 60vh; }
+  .xp-pre { max-height: 60dvh; }
 }
 
 /* Celular, vertical u horizontal (pantalla baja) */
-@media (max-width: 760px), (max-height: 480px) and (max-width: 960px) {
+@media (max-width: 600px), (max-height: 480px) and (max-width: 1024px) {
   .xp-solo { padding-top: 14px; }
   .layout.xp .side { display: flex; flex-direction: column; }
   .xp-head > .seg, .xp-opt .seg { width: 100%; }
@@ -76,7 +76,7 @@
   .xp-dl .btn { min-height: 44px; }
   .xp-dl .btn.primary { flex: 1 1 100%; }
   .xp-dl .btn:not(.primary) { flex: 1 1 auto; }
-  .xp-hits { max-height: 50vh; }
+  .xp-hits { max-height: 50dvh; }
   .xp-hits label { padding: 12px 10px; }
   .xp-hits input, .chk input { width: 20px; height: 20px; }
   .xp-stats { grid-template-columns: 1fr; }
@@ -84,6 +84,6 @@
   .xp-pre { font-size: 15.5px; max-height: none; }
   .xp-prow { padding: var(--s3) var(--s4); }
 }
-@media (max-height: 480px) and (max-width: 960px) {
-  .xp-pre, .xp-parts { max-height: 70vh; }
+@media (max-height: 480px) and (max-width: 1024px) {
+  .xp-pre, .xp-parts { max-height: 70dvh; }
 }

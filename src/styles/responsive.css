@@ -1,5 +1,5 @@
-/* Tablet: una sola columna, pero el documento sigue lado a lado */
-@media (max-width: 900px) {
+/* Tablet o ventana baja: una sola columna, pero el documento sigue lado a lado */
+@media (max-width: 1024px), (max-height: 620px) and (max-width: 1280px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
   .side { position: static; max-height: none; overflow: visible; }
   .rs { grid-template-columns: minmax(0, 1fr); }
@@ -8,7 +8,7 @@
 }
 
 /* Celular: la comparación pasa a ser un interruptor Original / Anonimizado */
-@media (max-width: 760px) {
+@media (max-width: 600px), (max-height: 480px) and (max-width: 1024px) {
   body { font-size: 15px; }
 
   .top { position: static; }
@@ -55,7 +55,7 @@
   .note .btn { min-height: var(--tap); }
 
   /* La ventana de acciones sube desde abajo, a todo lo ancho */
-  .pop { left: 0 !important; right: 0; top: auto !important; bottom: 0; width: auto; max-height: 70vh; overflow: auto;
+  .pop { left: 0 !important; right: 0; top: auto !important; bottom: 0; width: auto; max-height: 70dvh; overflow: auto;
     border-radius: 16px 16px 0 0; border-bottom: 0; padding: 16px 16px calc(88px + env(safe-area-inset-bottom, 0px)); gap: var(--s3); }
   .pop .btn { white-space: normal; text-align: center; }
   .toast { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
@@ -67,7 +67,7 @@
   .restored { max-height: none; }
 }
 
-@media (pointer: coarse), (max-width: 760px) {
+@media (pointer: coarse), (max-width: 600px) {
   .btn.sm, .seg button { min-height: var(--tap); }
   .ejump::after, .elabel::after { height: var(--tap); }
   .elin, .drop { min-height: var(--tap); }
@@ -76,3 +76,6 @@
 @media (prefers-reduced-motion: reduce) { .flash { animation: none; } .cat summary::before { transition: none; } }
 
 @media (max-width: 1024px) { .toast { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); } }
+
+/* Ventana baja: la cabecera de dos filas no se queda fija */
+@media (max-height: 620px) and (max-width: 1280px) { .top { position: static; } }

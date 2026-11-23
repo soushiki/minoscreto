@@ -16,16 +16,16 @@
 .xp-copy svg, .acts .btn svg, .xp-dl .btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; }
 
 /* Tableta (o ventana baja) */
-@media (max-width: 900px), (max-height: 620px) and (max-width: 1280px) {
+@media (max-width: 1024px), (max-height: 620px) and (max-width: 1280px) {
   .dl-receipt ol { flex-direction: column; }
 }
 
 /* Celular: botones de copiar a todo lo ancho, bajo cada parte */
-@media (max-width: 760px), (max-height: 480px) and (max-width: 960px) {
+@media (max-width: 600px), (max-height: 480px) and (max-width: 1024px) {
   .dl-again .btn { flex: 1 1 100%; min-height: 44px; }
   .xp-prow { grid-template-columns: 1fr 1fr 1fr; row-gap: 6px; }
   .xp-prow > span:last-child { grid-column: 1 / -1; }
   .xp-prow.hd > span:last-child { display: none; }
   .xp-copy { width: 100%; min-height: var(--tap); }
-  .xp-parts { max-height: 60vh; }
+  .xp-parts { max-height: 60dvh; }
 }

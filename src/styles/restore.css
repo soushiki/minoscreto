@@ -8,7 +8,7 @@
 .chips { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: 10px; }
 .chip { font-family: var(--mono); font-size: 11.5px; padding: var(--s1) 10px; border-radius: 5px; background: var(--surface2); }
 textarea.paste { width: 100%; min-height: 200px; resize: vertical; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--bg); padding: 10px 12px; font-family: var(--doc); font-size: 15px; line-height: 1.55; }
-.restored { font-family: var(--doc); font-size: 15.5px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--bg); max-height: 52vh; overflow: auto; }
+.restored { font-family: var(--doc); font-size: 15.5px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--bg); max-height: 52dvh; overflow: auto; }
 .restored mark { background: var(--accent-soft); color: inherit; border-bottom: 2px solid var(--accent); border-radius: 3px; }
 .stat { font-weight: 600; }
 .row-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: var(--s4); }

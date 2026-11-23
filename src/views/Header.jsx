@@ -6,12 +6,18 @@ export default function Header({ screen, onScreen, onHome, anonymizer }) {
 
   useLayoutEffect(() => {
     const el = ref.current;
-    const measure = () => document.documentElement.style.setProperty('--top-h', `${el.offsetHeight}px`);
+    const measure = () => {
+      const sticky = getComputedStyle(el).position === 'sticky';
+      document.documentElement.style.setProperty('--top-h', sticky ? `${el.offsetHeight}px` : '0px');
+    };
     measure();
-    if (typeof ResizeObserver === 'undefined') return undefined;
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
+    window.addEventListener('resize', measure);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(el);
+    return () => {
+      window.removeEventListener('resize', measure);
+      observer?.disconnect();
+    };
   }, []);
 
   const nothing = anonymizer.replacements === 0;
