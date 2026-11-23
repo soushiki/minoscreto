@@ -18,15 +18,16 @@ function cspHeaders() {
     },
     closeBundle() {
       const html = readFileSync(resolve(outDir, 'index.html'), 'utf8');
-      const hashes = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)]
-        .map(([, body]) => `'sha256-${createHash('sha256').update(body).digest('base64')}'`);
+      const hashes = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)]
+        .filter(([, attrs]) => !/\btype\s*=\s*["']?application\/ld\+json/i.test(attrs)) // JSON-LD no se ejecuta: sin hash
+        .map(([, , body]) => `'sha256-${createHash('sha256').update(body).digest('base64')}'`);
       const csp = [
         "default-src 'none'",
         // 'wasm-unsafe-eval' solo deja compilar WebAssembly (el motor PDFium); no habilita eval de JS.
         `script-src ${hashes.join(' ')} 'wasm-unsafe-eval'`,
         "style-src 'unsafe-inline' https://fonts.googleapis.com",
         'font-src https://fonts.gstatic.com data:',
-        'img-src data: blob:',
+        "img-src 'self' data: blob:",
         'worker-src blob: data:',
         // 'self': la única petición es el GET de los dos archivos del motor en /engine/ (ADR-004, S6).
         "connect-src 'self'",

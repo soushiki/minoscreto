@@ -51,9 +51,9 @@ describe('ADR-004: engine stays out of the page', () => {
     expect(html).not.toContain('createPdfRuntimeWasm');
   });
 
-  it('index.html stays at most 912 kB gzipped, as Vite reports it (S4; budget raised from 910 by the user 2026-11-22)', () => {
+  it('index.html stays at most 914 kB gzipped, as Vite reports it (S4; budget raised from 912 by the user 2026-11-23)', () => {
     expect(reportedGzip).toBeGreaterThan(0);
-    expect(reportedGzip).toBeLessThanOrEqual(912);
+    expect(reportedGzip).toBeLessThanOrEqual(914);
     expect(gzipSync(html, { level: 9 }).length).toBeLessThan(reportedGzip * 1000); // la cifra es de este archivo, no de otro
   });
 
@@ -133,7 +133,7 @@ describe('S2: CSP changes only by wasm-unsafe-eval and connect-src self', () => 
       "script-src HASH 'wasm-unsafe-eval'",
       "style-src 'unsafe-inline' https://fonts.googleapis.com",
       'font-src https://fonts.gstatic.com data:',
-      'img-src data: blob:',
+      "img-src 'self' data: blob:",
       'worker-src blob: data:',
       "connect-src 'self'",
       "base-uri 'none'",
@@ -149,5 +149,52 @@ describe('S2: CSP changes only by wasm-unsafe-eval and connect-src self', () => 
     const rule = toml.split('[[headers]]').find((block) => block.includes('for = "/engine/*"'));
     expect(rule).toContain('Cache-Control = "public, max-age=31536000, immutable"');
     expect(rule).not.toContain('Content-Security-Policy');
+  });
+});
+
+describe('T19: SEO and link preview in the served files', () => {
+  const meta = (attr, name) => html.match(new RegExp(`<meta ${attr}="${name}" content="([^"]*)"`))?.[1];
+  const ldScripts = () => [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter(([, attrs]) => /application\/ld\+json/.test(attrs));
+
+  it('index.html carries the canonical, Open Graph extras, Twitter tags, icon and theme colour', () => {
+    expect(html).toContain('<link rel="canonical" href="https://minoscreto.netlify.app/" />');
+    expect(meta('property', 'og:site_name')).toBe('Minoscreto');
+    expect(meta('property', 'og:locale')).toBe('es_CO');
+    expect(meta('property', 'og:image:alt')).toBeTruthy();
+    expect(meta('name', 'twitter:title')).toBeTruthy();
+    expect(meta('name', 'twitter:description')).toBeTruthy();
+    expect(meta('name', 'twitter:image')).toBe('https://minoscreto.netlify.app/og-image.png');
+    // Vite reescribe /favicon.svg a ./favicon.svg (misma ruta desde la raíz); sigue siendo un enlace externo.
+    expect(html).toMatch(/<link rel="icon" href="\.?\/favicon\.svg" type="image\/svg\+xml" \/>/);
+    expect(meta('name', 'theme-color')).toBe('#0D5C4B');
+  });
+
+  it('twitter title and description repeat the Open Graph ones', () => {
+    expect(meta('name', 'twitter:title')).toBe(meta('property', 'og:title'));
+    expect(meta('name', 'twitter:description')).toBe(meta('property', 'og:description'));
+  });
+
+  it('has exactly one JSON-LD script and it parses as a SoftwareApplication', () => {
+    const found = ldScripts();
+    expect(found).toHaveLength(1);
+    const data = JSON.parse(found[0][2]);
+    expect(data['@type']).toBe('SoftwareApplication');
+    expect(data.name).toBe('Minoscreto');
+  });
+
+  it('robots.txt, sitemap.xml and favicon.svg are served from the root', () => {
+    expect(readFileSync(join(outDir, 'robots.txt'), 'utf8')).toContain('Sitemap: https://minoscreto.netlify.app/sitemap.xml');
+    expect(readFileSync(join(outDir, 'sitemap.xml'), 'utf8')).toContain('<loc>https://minoscreto.netlify.app/</loc>');
+    expect(readFileSync(join(outDir, 'favicon.svg'), 'utf8')).toContain('<svg');
+  });
+
+  it('CSP allows same-origin images and hashes only executable scripts', () => {
+    const headers = readFileSync(join(outDir, '_headers'), 'utf8');
+    expect(headers).toContain("img-src 'self' data: blob:");
+    const hashes = headers.match(/script-src ([^;]*)/)[1].match(/'sha256-[A-Za-z0-9+/=]+'/g) ?? [];
+    const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter(([, attrs]) => !/application\/ld\+json/.test(attrs));
+    expect(hashes).toHaveLength(scripts.length);
+    const ldHash = `'sha256-${createHash('sha256').update(ldScripts()[0][2]).digest('base64')}'`;
+    expect(hashes).not.toContain(ldHash);
   });
 });
