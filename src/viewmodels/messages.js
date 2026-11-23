@@ -5,7 +5,7 @@ export const OMITTED_CHARS = 'Algunos caracteres no se pueden escribir en el PDF
 
 // PDF con diseño original (R1, R4, R9, R10): lo que se lee en la lista de descarga (aria-live).
 export const LAYOUT_PREPARING = 'Preparando el PDF con su diseño original…';
-export const layoutProgress = (done, total) => `Preparando el PDF con su diseño original: página ${done} de ${total}…`;
+export const layoutProgress = (done, total) => `Preparando el PDF con su diseño original (página ${done} de ${total})…`;
 export const LAYOUT_OK = 'PDF con diseño original';
 export const imagePagesNote = (pages) => {
   const n = pages.length;
@@ -25,7 +25,7 @@ export const LAYOUT_FALLBACK = Object.freeze({
 
 // PDF restaurado con su diseño original (R7, R8; T14): lo que se lee bajo el botón de descargar (aria-live).
 export const RESTORE_PREPARING = 'Preparando el PDF restaurado con su diseño original…';
-export const restoreProgress = (done, total) => `Preparando el PDF restaurado con su diseño original: página ${done} de ${total}…`;
+export const restoreProgress = (done, total) => `Preparando el PDF restaurado con su diseño original (página ${done} de ${total})…`;
 export const RESTORE_LAYOUT_OK = 'PDF restaurado con su diseño original.';
 
 const RESTORED_TEXT_PDF = 'Se descargó el PDF restaurado de texto.';
