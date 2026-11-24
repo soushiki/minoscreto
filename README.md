@@ -6,12 +6,12 @@
 
 Anonimiza documentos Word y expedientes PDF antes de usar IA y restaura los nombres después. Todo corre en el navegador: el documento nunca sale del computador.
 
-*In English:* a browser-only tool for Colombian legal documents. It replaces names, ID numbers (cédulas) and other personal data with tags like `[PERSONA_1]` before the text goes to an AI, then puts the real names back into the AI's answer. Built with React 19 and Vite; 160 automated tests (Vitest + Testing Library) run on every push.
+*In English:* a browser-only tool for Colombian legal documents. It replaces names, ID numbers (cédulas) and other personal data with tags like `[PERSONA_1]` before the text goes to an AI, then puts the real names back into the AI's answer. Built with React 19 and Vite; 567 automated tests (Vitest + Testing Library) run on every push.
 
 ![Minoscreto welcome screen](docs/screenshot.jpg)
 
 ## Pruebas
-- 160 pruebas en 10 archivos (`tests/`): detección de nombres, direcciones y cédulas, división de líneas, puntajes, expediente PDF/Word, descargas y la interfaz.
+- 567 pruebas en 28 archivos (`tests/`): detección de nombres, direcciones y cédulas, división de líneas, puntajes, expediente PDF/Word, motor de diseño PDF, revisión final (verify), restaurar con diseño, descargas y la interfaz.
 - Corren en cada push con GitHub Actions (`.github/workflows/test.yml`): `npm ci`, `npm test`, `npm run build`.
 - `npm run eval` mide el recall y la precisión de la detección con documentos reales etiquetados, que viven fuera del repo (Ley 1581).
 
@@ -36,6 +36,13 @@ Pestaña **Expediente**. Lee la capa de texto de un PDF ya pasado por OCR (por e
 
 ## Descargas
 Un solo botón «Descargar»: baja el documento protegido con un nombre neutro (`documento-7F3K_protegido.docx`, `.md` o `.pdf`, para que la IA no vea el nombre del archivo) y, medio segundo después, su diccionario con el nombre real y el mismo código (`<nombre>_diccionario-7F3K.json`), para que no se pueda olvidar. Queda a la vista una lista con ambos y «Descargar diccionario de nuevo» por si el navegador bloqueó la segunda descarga. Un expediente en varias partes baja como un solo `<nombre>-7F3K.zip` (partes `documento-7F3K_parte-…`, diccionario y `LEAME.txt`). El código de 4 caracteres cambia en cada exportación. Al restaurar, el archivo se guarda como `<nombre>-restaurado`, con el nombre tomado del diccionario. «Copiar texto para la IA» (o «Copiar parte X de N») copia el texto protegido sin descomprimir nada. Restaurar acepta el diccionario o ese .zip.
+
+## PDF con diseño original
+Un PDF subido (no Word ni partes de un .zip) se descarga con su diseño: cada dato se borra de la página y su etiqueta queda en su lugar. El motor es EmbedPDF/PDFium (Apache-2.0), corre en un worker y son dos archivos con hash en `/engine/`, del mismo origen, que se cargan la primera vez y se comprueban con SHA-256.
+- Antes de bajar, una revisión final lee los bytes exactos del PDF: si queda algún dato, no se descarga ese PDF.
+- Entonces se baja el PDF de texto de antes con un mensaje del motivo: páginas escaneadas (dice cuáles), dato que no se pudo cambiar, motor que no cargó o archivo muy grande.
+- Restaurar hace lo mismo: conserva el diseño o cae al texto con su mensaje.
+- Código: `src/engine-worker/`, `src/model/engine/`, `src/model/layout/`, `src/model/pdf/`.
 
 ## Conector para Claude (MCP local)
 `mcp/` expone el mismo `src/model` como servidor MCP por stdio, con las herramientas `anonimizar`, `leer_protegido` y `restaurar`: lee y escribe en el disco del usuario y solo devuelve etiquetas, conteos y rutas. Pruebas: `tests/mcp.test.js` (en Node, dentro de `npm test`). Empaquetar: en `mcp/`, `npm install` y luego `npm run pack` → `mcp/build/minoscreto.mcpb`. Guía para quien lo usa en la pestaña Code de Claude Desktop: `mcp/guia/` (HTML para imprimir a PDF y el mensaje de instalación en `.txt`).

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.0 — sin publicar
+### Añadido
+- PDF con su diseño original al proteger: cada dato se borra de verdad de la página y su etiqueta queda en su sitio, también los datos partidos entre dos líneas o entre dos páginas.
+- Revisión final: el PDF con diseño solo se descarga si no queda ningún dato en él. Si no, se baja el PDF de texto de antes, con un mensaje que explica por qué.
+- Motivos del respaldo en texto: páginas escaneadas (dice cuáles), dato que no se pudo cambiar, motor que no cargó o archivo muy grande.
+- Aviso de las páginas con imágenes, para que se revisen a mano.
+- Del PDF protegido se quitan metadatos, formularios, anotaciones, adjuntos y elementos similares.
+- PDF con contraseña: se pide de nuevo al descargar con diseño, y el PDF protegido sale sin contraseña.
+- Restaurar también conserva el diseño, tanto con nuestro PDF como con el que devolvió la IA, con el mismo respaldo de texto y su mensaje.
+- El motor de PDF (≈3,2 MB) se descarga solo la primera vez que se necesita, desde el mismo sitio; mientras se prepara se ve una barra de carga y el avance por página.
+- Vista previa del enlace al compartirlo (Open Graph), `robots.txt`, sitemap e ícono del sitio.
+- Conector local para Claude (MCP): anonimiza, lee el texto protegido y restaura desde el disco del usuario; si el PDF tiene contraseña, la pide en una ventana de Windows.
+
+### Cambiado
+- Colores con mejor contraste y botones de al menos 44 px.
+- Espacio libre en la esquina inferior derecha para el sello de Netlify.
+- Tema claro u oscuro según el sistema.
+- La ventana de acciones es nativa (Esc la cierra) y los valores se pueden operar con el teclado.
+- Mejor ajuste en teléfono, tableta y ventanas bajas.
+
 ## 0.4.0 — 2026-11-19
 ### Añadido
 - PDF con contraseña: Minoscreto la pide, permite verla con «Mostrar»/«Ocultar» y la usa solo para abrir el archivo en este computador; no se guarda ni se envía.
