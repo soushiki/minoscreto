@@ -130,10 +130,10 @@ describe('restoreLayout (T13)', () => {
     for (const tag of Object.keys(dict)) expect(`${one} ${two}`).not.toContain(tag);
   });
 
-  it('colour: our green tags come back black; the AI own grey is kept', async () => {
+  it('colour: our tags are black and come back black; the AI own grey is kept', async () => {
     const { loadEngine } = engineFor();
     const protectedPdf = await protectLayout({ bytes: fixture('prosa_sintetico.pdf'), entities: ENTITIES, loadEngine });
-    expect(fillOf(protectedPdf.bytes, '[PERSONA_1]').slice(0, 3)).toEqual([13, 92, 74]);
+    expect(fillOf(protectedPdf.bytes, '[PERSONA_1]').slice(0, 3)).toEqual([0, 0, 0]);
     const back = await restoreLayout({ bytes: protectedPdf.bytes, dict: TABLA, loadEngine });
     expect(fillOf(back.bytes, 'Ana María Pérez Gómez')).toEqual([0, 0, 0, 255]);
 

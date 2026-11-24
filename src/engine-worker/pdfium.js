@@ -14,7 +14,8 @@ const ERR_PASSWORD = 4; // FPDF_ERR_PASSWORD
 const ANNOT_REDACT = 28; // FPDF_ANNOT_REDACT
 const SAVE_REMOVE_SECURITY = 3; // FPDF_REMOVE_SECURITY: guardado completo y sin cifrado
 const NULL = 0n; // los punteros del runtime son BigInt
-const TAG_COLOR = [13, 92, 74, 255]; // verde oscuro de la marca, como en el PDF de texto
+const TAG_COLOR = [0, 0, 0, 255]; // negro (R3; usuario, 2026-11-24)
+const OLD_TAG_COLOR = [13, 92, 74, 255]; // verde de las etiquetas de prueba anteriores: al restaurar también pasa a negro
 const TAG_MIN_SCALE = 0.6; // la etiqueta se encoge para caber en el ancho del valor, hasta el 60 % (ADR-008)
 const TAG_SLACK = 6; // puntos de holgura sobre el ancho del valor (si detrás viene un espacio no se usa: ver newTag)
 const TAG = /^\[[\x21-\x5c\x5e-\x7e]{1,60}\]$/; // etiqueta [TIPO_n]: ASCII visible (Helvetica), sin «]» dentro
@@ -466,9 +467,9 @@ export function createPdfium({ fn, mem }) {
           const natural = (Math.abs(f32(quad[2], 0) - f32(quad[0], 0)) * Math.hypot(a, b)) || 1;
           const k = Math.max(TAG_MIN_SCALE, Math.min(1, (item.width + item.slack) / natural));
           fn.FPDFPageObj_Transform(obj, k * a, k * b, k * c, k * dd, item.at[0], item.at[1]);
-          // Restaurar: el valor lleva el color del texto que cubre; el verde de nuestras etiquetas pasa a negro.
+          // Restaurar: el valor lleva el color del texto que cubre; el verde de etiquetas anteriores pasa a negro.
           const own = item.style.color;
-          const color = !restore ? TAG_COLOR : own.every((v, i) => v === TAG_COLOR[i]) ? [0, 0, 0, 255] : own;
+          const color = !restore ? TAG_COLOR : own.every((v, i) => v === OLD_TAG_COLOR[i]) ? TAG_COLOR : own;
           if (!fn.FPDFPageObj_SetFillColor(obj, ...color)) throw new PdfiumFault('font', 'color de etiqueta');
           if (!fn.FPDFTextObj_SetTextRenderMode(obj, item.style.mode)) throw new PdfiumFault('font', 'modo de etiqueta');
           return obj;

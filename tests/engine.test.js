@@ -275,8 +275,8 @@ describe('engine worker: editPage protect + save (T9, ADR-008)', () => {
       else if (fn === OPS.showText && argsArray[i][0].map((g) => g.unicode ?? '').join('').includes(tag)) shown ??= fill;
     });
     expect(shown).not.toBeNull();
-    // la etiqueta va en el verde oscuro de la marca (TAG_COLOR en pdfium.js), no en negro; el original sí es negro
-    expect(shown).toBe('#0d5c4a');
+    // la etiqueta va en negro, como el texto original (R3; usuario, 2026-11-24)
+    expect(shown).toBe('#000000');
   });
 
   it('same rules as the gate: whole words only, longest first, accents and case folded', async () => {
