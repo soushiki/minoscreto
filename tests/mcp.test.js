@@ -1,7 +1,7 @@
 // @vitest-environment node
 // El conector para Claude Desktop (mcp/core.mjs) en Node, sin DOM del navegador: lee, anonimiza y restaura en disco,
 // y nunca devuelve un valor real. Datos: el contrato de ejemplo de la página (sintético).
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -180,5 +180,39 @@ describe('restore', () => {
     const b = await restore({ texto: tag, diccionario: dictionaryPath, formato: 'md' });
     expect(b.outPath).not.toBe(a.outPath);
     expect(b.outPath).toMatch(/ \(2\)\.md$/);
+  });
+
+  describe('refuses output names that would leak real values', () => {
+    const missing = (p) => expect(stat(p)).rejects.toThrow();
+
+    it.each(['x_protegido.md', 'X_PROTEGIDO.MD'])('%s is refused and nothing is written', async (name) => {
+      const { dictionaryPath, tag } = await prepared();
+      const out = join(dir, name);
+      await expect(restore({ texto: tag, diccionario: dictionaryPath, rutaSalida: out })).rejects.toThrow(/protegido/);
+      await missing(out);
+    });
+
+    it('a dictionary-like name is refused', async () => {
+      const { dictionaryPath, tag } = await prepared();
+      const out = join(dir, 'Contrato_diccionario-AB12.md');
+      await expect(restore({ texto: tag, diccionario: dictionaryPath, rutaSalida: out })).rejects.toThrow(/diccionario/);
+      await missing(out);
+    });
+
+    it('a Word input to a dictionary-like .docx name is refused', async () => {
+      const { dictionaryPath, tag } = await prepared();
+      const docxIn = join(dir, 'respuesta.docx');
+      await writeFile(docxIn, new Uint8Array(await buildDocx([`El arrendatario es ${tag}.`])));
+      const out = join(dir, 'r_diccionario.docx');
+      await expect(restore({ ruta: docxIn, diccionario: dictionaryPath, rutaSalida: out })).rejects.toThrow(/diccionario/);
+      await missing(out);
+    });
+
+    it('restore then readProtected cannot reach the chat', async () => {
+      const { dictionaryPath, tag } = await prepared();
+      const out = join(dir, 'x_protegido.md');
+      await expect(restore({ texto: tag, diccionario: dictionaryPath, rutaSalida: out })).rejects.toThrow(/protegido/);
+      await expect(readProtected({ ruta: out })).rejects.toThrow();
+    });
   });
 });

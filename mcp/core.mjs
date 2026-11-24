@@ -226,6 +226,14 @@ async function writeRestored(text, outPath) {
   return dropped.length > 0;
 }
 
+/** Un resultado restaurado lleva datos reales: nunca con un nombre que leer_protegido abriría ni de diccionario. */
+function checkRestoreOutput(outPath) {
+  const name = basename(outPath);
+  if (PROTECTED.test(name) || /_diccionario/i.test(name)) {
+    throw new ToolError('No guardo un resultado restaurado con un nombre «…_protegido.md» ni «…_diccionario…»: elige otro nombre.');
+  }
+}
+
 const total = (counts) => Object.values(counts || {}).reduce((n, c) => n + c, 0);
 
 /**
@@ -248,7 +256,9 @@ export async function restore({ texto, ruta, diccionario, rutaSalida, formato } 
       let result;
       try { result = await restoreDocx(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), dictionary); }
       catch { throw new ToolError('No se pudo procesar el Word.'); }
+      if (rutaSalida) checkRestoreOutput(checkPath(rutaSalida, 'de salida'));
       const outPath = await freePath(rutaSalida ? checkPath(rutaSalida, 'de salida') : defaultOutput(dictionaryPath, '.docx'));
+      checkRestoreOutput(outPath);
       if (extname(outPath).toLowerCase() !== '.docx') throw new ToolError('Un Word restaurado se guarda como .docx.');
       await writeFile(outPath, await toBytes(result.blob), { flag: 'wx' });
       return { outPath, replaced: total(result.counts), unknown: result.unknown, omittedChars: false };
@@ -275,7 +285,9 @@ export async function restore({ texto, ruta, diccionario, rutaSalida, formato } 
 
   const ext = rutaSalida ? extname(rutaSalida).toLowerCase() : `.${formato || (inExt ? inExt.slice(1) : 'docx')}`;
   if (!OUTPUTS.has(ext)) throw new ToolError('El resultado se guarda como .docx, .pdf, .md o .txt.');
+  if (rutaSalida) checkRestoreOutput(checkPath(rutaSalida, 'de salida'));
   const outPath = await freePath(rutaSalida ? checkPath(rutaSalida, 'de salida') : defaultOutput(dictionaryPath, ext));
+  checkRestoreOutput(outPath);
   let omittedChars;
   try { omittedChars = await writeRestored(restored.text, outPath); }
   catch (error) { throw new ToolError(`No se pudo escribir ${outPath}: ${error.code || error.message}`); }
