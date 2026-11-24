@@ -352,6 +352,7 @@ describe('PDF restaurado con diseño (T14)', () => {
     expect(text).not.toMatch(TAG);
     await waitFor(() => expect(status().textContent).toBe(RESTORE_FALLBACK['missed-value']));
     expect(document.querySelector('.load-bar')).toBeNull();
+    expect(document.querySelector('.rs-status[aria-live="polite"]').textContent).toBe(RESTORE_FALLBACK['missed-value']); // A1
     expect(status().classList.contains('rs-fallback')).toBe(true);
   }, 40000);
 

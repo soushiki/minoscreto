@@ -398,6 +398,7 @@ describe('PDF con diseño original (T11)', () => {
     await pairDone();
     pdfName();
     expect(receipt()).toContain(LAYOUT_OK);
+    expect(document.querySelector('.dl-receipt[aria-live="polite"]').textContent).toContain(LAYOUT_OK); // A1: el mensaje final se anuncia
     expect(document.querySelector('.load-bar')).toBeNull();
     expect(fallback()).toBeNull();
     expect(document.querySelector('.dl-images')).toBeNull();
@@ -456,6 +457,8 @@ describe('PDF con diseño original (T11)', () => {
     pdfName();
     expect(receipt()).not.toContain(LAYOUT_OK);
     expect(fallback()).toBe(LAYOUT_FALLBACK.scan([2]));
+    // A1: el aviso de la copia de texto está dentro de la región aria-live
+    expect(document.querySelector('.dl-receipt[aria-live="polite"]').textContent).toContain(LAYOUT_FALLBACK.scan([2]));
   }, 40000);
 
   it('dato partido entre dos líneas → el motor lo cambia: PDF con diseño y sin aviso (T12b)', async () => {

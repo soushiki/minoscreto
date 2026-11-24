@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import JSZip from 'jszip';
@@ -31,6 +31,27 @@ describe('App', () => {
     expect(screen.getByPlaceholderText(/Pega aquí la respuesta/)).toBeTruthy();
     cleanup();
   }, 20000);
+
+  it('R6a: el motor PDFium no se pide al abrir la página ni al llegar a Expediente sin archivo', async () => {
+    const fetched = [];
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => { fetched.push(String(url?.url ?? url)); return new Response('', { status: 404 }); });
+    const workers = [];
+    const RealWorker = globalThis.Worker;
+    globalThis.Worker = class { constructor(url) { workers.push(String(url)); } postMessage() {} terminate() {} addEventListener() {} removeEventListener() {} };
+    try {
+      const user = userEvent.setup();
+      render(<App />);
+      await goToTools(user);
+      await user.click(screen.getByRole('button', { name: 'Expediente' }));
+      expect(screen.getByRole('button', { name: 'Elegir archivo' })).toBeTruthy();
+      expect(fetched.filter((url) => url.includes('/engine/'))).toEqual([]);
+      expect(workers.filter((url) => /engine/i.test(url))).toEqual([]);
+    } finally {
+      spy.mockRestore();
+      if (RealWorker) globalThis.Worker = RealWorker; else delete globalThis.Worker;
+      cleanup();
+    }
+  });
 
   it('abre el modo expediente y rechaza archivos que no son PDF ni Word', async () => {
     const user = userEvent.setup();

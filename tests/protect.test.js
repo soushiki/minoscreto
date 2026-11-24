@@ -98,6 +98,22 @@ describe('protectLayout (T10)', () => {
     expect(progress.at(-1)).toEqual({ phase: 'verify', done: 1, total: 1 });
   });
 
+  it('R4b: the check runs on the exact bytes that download (same content and length, copied at call time)', async () => {
+    const seen = [];
+    verifyProtected.mockImplementationOnce(async (bytes, ...rest) => {
+      seen.push(Uint8Array.from(bytes)); // copia en el momento de la llamada, por si luego se tocan los bytes
+      return (await vi.importActual('../src/model/layout/verify.js')).verifyProtected(bytes, ...rest);
+    });
+    const { loadEngine } = engineFor();
+    const out = await protectLayout({ bytes: fixture('tabla_sintetico.pdf'), entities: ENTITIES, loadEngine });
+    const last = verifyProtected.mock.calls.at(-1)[0];
+    expect(seen).toHaveLength(1);
+    expect(last.length).toBe(out.bytes.length);
+    expect(Buffer.from(last).equals(Buffer.from(out.bytes))).toBe(true);
+    expect(seen[0].length).toBe(out.bytes.length);
+    expect(Buffer.from(seen[0]).equals(Buffer.from(out.bytes))).toBe(true);
+  });
+
   it('a page with a logo and real text is protected and listed in imagePages', async () => {
     const bytes = await makePdf(({ page, font, png }) => {
       page.drawImage(png, { x: 40, y: 760, width: 80, height: 40 });

@@ -210,6 +210,73 @@ describe('engine worker: editPage protect + save (T9, ADR-008)', () => {
     expect(lines).toContain('Demandante: [PERSONA_1] , C.C. [CEDULA_1]');
     expect(lines.some((line) => line.includes('NIT [NIT_1]'))).toBe(true);
     expect(lines.join('\n')).not.toMatch(/Laura Patricia|45\.521\.884|901\.234\.567-8/);
+    // R9: una sola revisión, sin versiones antiguas con los datos reales
+    const raw = Buffer.from(out).toString('latin1');
+    expect(raw.match(/startxref/g)).toHaveLength(1);
+    expect(raw.match(/%%EOF/g)).toHaveLength(1);
+  });
+
+  it('R2b: the redaction adds no covering boxes (no more fill/rectangle operators than the original)', async () => {
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const { OPS } = pdfjs;
+    const counts = async (bytes) => {
+      const doc = await pdfjs.getDocument({ data: bytes.slice(), verbosity: 0, isEvalSupported: false }).promise;
+      const watched = [OPS.rectangle, OPS.fill, OPS.eoFill, OPS.fillStroke, OPS.eoFillStroke, OPS.constructPath];
+      const pages = [];
+      for (let n = 1; n <= doc.numPages; n++) {
+        const { fnArray } = await (await doc.getPage(n)).getOperatorList();
+        pages.push(Object.fromEntries(watched.map((op) => [op, fnArray.filter((f) => f === op).length])));
+      }
+      return pages;
+    };
+    const { out, replaced } = protect('tabla_sintetico.pdf');
+    expect(replaced.reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+    const before = await counts(fixture('tabla_sintetico.pdf'));
+    const after = await counts(out);
+    expect(after).toHaveLength(before.length);
+    after.forEach((page, p) => {
+      for (const op of Object.keys(page)) expect(page[op]).toBeLessThanOrEqual(before[p][op]);
+    });
+  });
+
+  it('R3a: the tag sits at the value\'s baseline and start, same height, brand colour, and extractable', async () => {
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const value = '73.215.884';
+    const tag = '[CEDULA_2]';
+    const { out } = protect('tabla_sintetico.pdf');
+    const items = async (bytes) => {
+      const doc = await pdfjs.getDocument({ data: bytes.slice(), verbosity: 0, isEvalSupported: false }).promise;
+      const all = [];
+      for (let n = 1; n <= doc.numPages; n++) all.push((await (await doc.getPage(n)).getTextContent()).items);
+      return all;
+    };
+    const originalPages = await items(fixture('tabla_sintetico.pdf'));
+    const outPages = await items(out);
+    const p = originalPages.findIndex((list) => list.some((item) => item.str.includes(value)));
+    expect(p).toBeGreaterThanOrEqual(0);
+    const orig = originalPages[p].find((item) => item.str.includes(value));
+    const moved = outPages[p].find((item) => item.str.includes(tag));
+    expect(moved).toBeTruthy();
+    expect(Math.abs(moved.transform[5] - orig.transform[5])).toBeLessThanOrEqual(1);
+    // x de inicio del valor dentro de su objeto original frente a x de la etiqueta en el de salida
+    const startX = (item, str, needle) => item.transform[4] + (item.width * str.indexOf(needle)) / str.length;
+    expect(Math.abs(startX(moved, moved.str, tag) - startX(orig, orig.str, value))).toBeLessThanOrEqual(2);
+    expect(Math.abs(moved.height - orig.height) / orig.height).toBeLessThanOrEqual(0.15);
+    // color: el relleno activo al mostrar la etiqueta es negro
+    const doc = await pdfjs.getDocument({ data: out.slice(), verbosity: 0, isEvalSupported: false }).promise;
+    const { OPS } = pdfjs;
+    const { fnArray, argsArray } = await (await doc.getPage(p + 1)).getOperatorList();
+    let fill = 'default';
+    let shown = null;
+    fnArray.forEach((fn, i) => {
+      if (fn === OPS.setFillRGBColor) fill = String(argsArray[i]);
+      else if (fn === OPS.setFillGray) fill = `gray:${argsArray[i]}`;
+      else if (fn === OPS.setFillColor) fill = `c:${argsArray[i]}`;
+      else if (fn === OPS.showText && argsArray[i][0].map((g) => g.unicode ?? '').join('').includes(tag)) shown ??= fill;
+    });
+    expect(shown).not.toBeNull();
+    // la etiqueta va en el verde oscuro de la marca (TAG_COLOR en pdfium.js), no en negro; el original sí es negro
+    expect(shown).toBe('#0d5c4a');
   });
 
   it('same rules as the gate: whole words only, longest first, accents and case folded', async () => {
