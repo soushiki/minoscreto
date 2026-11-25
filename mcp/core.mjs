@@ -17,6 +17,16 @@ import { askPasswordWindow } from './password.mjs';
 import { readDocxParagraphs } from '../src/model/expediente/docxSource.js';
 import { rejoinTags } from '../src/model/pdf/rejoin.js';
 import { writeTextPdf } from '../src/model/pdf/writer.js';
+import { parseCommonNouns, setCommonNouns } from '../src/model/lexicon.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+// Lista de palabras comunes (ADR-012), la misma que usa la página. Sin el archivo el conjunto queda vacío.
+try {
+  setCommonNouns(parseCommonNouns(readFileSync(fileURLToPath(new URL('../src/model/data/common-nouns.txt', import.meta.url)), 'utf8')));
+} catch (error) {
+  if (error?.code !== 'ENOENT') throw error; // solo «no existe»: cualquier otro fallo se ve
+}
 
 export const MAX_BYTES = 200 * 1024 * 1024;
 /** Lo que vuelve a Claude en una sola respuesta; el resto se pide con leerProtegido. */

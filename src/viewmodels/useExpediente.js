@@ -10,6 +10,7 @@ import { expedienteReducer, initialExpediente } from './expedienteState.js';
 import { runExpedienteTask } from './expedienteWorker.js';
 import { useProtectedDownload } from './useProtectedDownload.js';
 import { usePasswordPrompt } from './usePasswordPrompt.js';
+import { ensureCommonNouns } from './commonNouns.js';
 
 const keyOf = (p) => `${p.page}:${p.text}`;
 const variantKey = (s) => `${s.entityId}:${s.variant}`;
@@ -165,7 +166,7 @@ export function useExpediente({ save, notify }) {
       const { original, ...read } = await readSource(file, controller.signal);
       if (controller.signal.aborted) return;
       dispatch({ type: 'analyzing', readMs: now() - t });
-      const result = await runExpedienteTask('prepare', read);
+      const result = await runExpedienteTask('prepare', { ...read, commonNouns: await ensureCommonNouns() });
       if (controller.signal.aborted) return;
       if (!result.full.paragraphs.length) {
         dispatch({ type: 'failed' });

@@ -11,7 +11,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "eval": "node scripts/eval.mjs"
+    "eval": "node scripts/eval.mjs",
+    "nouns": "node scripts/build-common-nouns.mjs"
   },
   "dependencies": {
     "@embedpdf/engine-runtime": "3.3.0",

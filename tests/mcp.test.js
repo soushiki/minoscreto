@@ -8,10 +8,18 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { anonymizeFile, readProtected, restore, ToolError, CHUNK_CHARS } from '../mcp/core.mjs';
 import { buildDocx, openDocx, SAMPLE_PARAGRAPHS } from '../src/model/index.js';
 import { writeTextPdf } from '../src/model/pdf/writer.js';
+import { COMMON_NOUNS } from '../src/model/lexicon.js';
 
 const plain = SAMPLE_PARAGRAPHS.map((p) => (typeof p === 'string' ? p : p.runs.map((r) => r.t).join('')));
 const REAL = ['Carlos Andrés Mendoza Ríos', '1.047.382.915', '901.234.567-8', 'Laura Patricia'];
 const noRealValue = (value) => { for (const v of REAL) expect(JSON.stringify(value)).not.toContain(v); };
+
+describe('palabras comunes (ADR-012)', () => {
+  it('core.mjs loads the shipped list at import', () => {
+    expect(COMMON_NOUNS.size).toBe(4606);
+    expect(COMMON_NOUNS.has('empresa')).toBe(true);
+  });
+});
 
 let dir;
 beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'minoscreto-mcp-')); });

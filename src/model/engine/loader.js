@@ -2,6 +2,8 @@
 // archivos del build (mismo origen), SHA-256 de cada uno contra el valor del build, y solo entonces el worker blob:
 // recibe los bytes del wasm. Es el único `fetch` de src/ (fitness en tests/engine.test.js).
 import { ENGINE } from 'virtual:minoscreto-engine';
+import { COMMON_NOUNS_FILE } from 'virtual:minoscreto-data';
+import { parseCommonNouns } from '../lexicon.js';
 
 /** Códigos propios del cargador; un fallo de PDFium trae el suyo (PdfiumFault del worker). */
 export const LOADER_CODES = Object.freeze(['unavailable', 'unsupported', 'wasm', 'fetch', 'hash', 'worker', 'timeout', 'terminated']);
@@ -20,10 +22,11 @@ const OPEN_TIMEOUT_MS = 30_000; // abrir un archivo de hasta 80 MB
 const CALL_TIMEOUT_MS = 10_000; // por página (ADR-005)
 const SAVE_TIMEOUT_MS = 30_000; // guardar un archivo de hasta 80 MB
 const ENGINE_PATH = /^\/engine\/[\w.-]+$/; // mismo origen, solo /engine/ (S6)
+const DATA_PATH = /^\/data\/[\w.-]+$/; // la lista de palabras comunes, mismo origen, solo /data/
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 
-async function getVerified(file) {
-  if (!ENGINE_PATH.test(file?.url ?? '') || !SHA256_HEX.test(file?.sha256 ?? '')) throw new EngineError('unavailable', 'ENGINE inválido');
+export async function getVerified(file, pathRe = ENGINE_PATH) {
+  if (!pathRe.test(file?.url ?? '') || !SHA256_HEX.test(file?.sha256 ?? '')) throw new EngineError('unavailable', 'ENGINE inválido');
   let bytes;
   try {
     const response = await fetch(file.url, { method: 'GET', credentials: 'same-origin', redirect: 'error' });
@@ -170,3 +173,14 @@ export function createEngineLoader(engine = ENGINE) {
 }
 
 export const loadEngine = createEngineLoader();
+
+/** Palabras comunes del build (ADR-012). Sin lista o ante cualquier fallo devuelve [] y la página funciona como antes. */
+export async function loadCommonNouns(file = COMMON_NOUNS_FILE) {
+  if (!file) return [];
+  try {
+    return parseCommonNouns(new TextDecoder('utf-8').decode(await getVerified(file, DATA_PATH)));
+  } catch {
+    // La lista solo afina la detección: si no llega o su hash no coincide, se sigue sin ella (nunca se rompe la página).
+    return [];
+  }
+}

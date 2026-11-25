@@ -1,12 +1,15 @@
 // Trabajo pesado del modo expediente. Corre en un Web Worker para no congelar la pantalla con 600 folios;
 // si el navegador no tiene workers (pruebas), se llama directamente.
 import { buildEntities } from '../model/index.js';
+import { setCommonNouns } from '../model/lexicon.js';
 import { buildDocument, buildDocxDocument, anonymizeTexts, findOcrVariants, tidyEntities } from '../model/expediente/index.js';
 
 const now = () => performance.now();
 
 /** Desde un PDF ({ pages }) o desde los párrafos de un Word ({ paragraphs }). */
-function prepare({ pages, paragraphs }) {
+function prepare({ pages, paragraphs, commonNouns }) {
+  // Este módulo es otra copia del lexicon (corre en el worker): las palabras comunes llegan en el mensaje.
+  if (Array.isArray(commonNouns)) setCommonNouns(commonNouns);
   let t = now();
   const build = pages ? (opts) => buildDocument(pages, opts) : (opts) => buildDocxDocument(paragraphs, opts);
   const full = build();

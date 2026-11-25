@@ -49,3 +49,5 @@ Un PDF subido (no Word ni partes de un .zip) se descarga con su diseño: cada da
 
 ## Licencias de terceros
 El motor PDF que conserva el diseño es PDFium a través de [`@embedpdf/engine-runtime`](https://github.com/embedpdf/embed-pdf-viewer) y `@embedpdf/engine-runtime-wasm32` (3.3.0, Apache-2.0), y solo se carga cuando hace falta.
+
+Lista de palabras comunes: [FrequencyWords](https://github.com/hermitdave/FrequencyWords) de Hermit Dave (es_50k, CC BY-SA 4.0), filtrada con el diccionario es_CO de LibreOffice; la lista derivada `src/model/data/common-nouns.txt` también es CC BY-SA 4.0.

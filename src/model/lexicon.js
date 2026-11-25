@@ -1,3 +1,5 @@
+import { fold } from './text.js';
+
 const set = (words) => new Set(words.split(/\s+/).filter(Boolean));
 
 export const FIRST_NAMES = set(`maria jose juan luis carlos jorge pedro miguel andres david daniel santiago sebastian alejandro camilo felipe fernando ricardo roberto eduardo fabian gustavo hector hernan ivan jairo javier jesus julio mauricio nicolas oscar rafael ramon sergio victor william wilson alvaro armando cesar diego edgar edwin elkin fredy german guillermo harold hugo humberto jaime jhon john kevin leonardo manuel marco mario mateo nelson orlando pablo rodrigo samuel stiven tomas yesid danilo anibal arturo augusto bernardo cristian enrique ernesto francisco gerardo gilberto henry jhonatan jhoan lucas martin nestor omar pastor rene ruben tulio
@@ -130,3 +132,18 @@ export const COMMON_LOWER_NAMES = set(`mora calle casas salas torres flores camp
 franco bravo leal rico bueno santos reyes rey villa vega rios campo sierra cano vidal lara nieto palacio puentes vela vera pinto gil rubio
 angel amparo consuelo esperanza dolores mercedes pilar soledad victoria rocio azucena gloria clara blanca sol estrella aurora alegria cielo
 patria fe caridad milagros remedios socorro rosario piedad merced reina cristo jesus santa santo`);
+
+// Palabras comunes del español (lista aparte, src/model/data/common-nouns.txt, CC BY-SA 4.0). Vacío hasta que la
+// página, el worker del expediente o el conector la cargan con setCommonNouns; con el Set vacío nada cambia.
+export const COMMON_NOUNS = new Set();
+
+/** Texto del archivo de la lista: una palabra por línea; se ignoran las líneas vacías y las de comentario («#»). */
+export function parseCommonNouns(text) {
+  return String(text).split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith('#')).map(fold);
+}
+
+/** Reemplaza el contenido de COMMON_NOUNS (formas plegadas). */
+export function setCommonNouns(words) {
+  COMMON_NOUNS.clear();
+  for (const w of words) COMMON_NOUNS.add(fold(w));
+}

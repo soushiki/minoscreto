@@ -117,8 +117,45 @@ function engineAsset() {
   };
 }
 
+// Lista de palabras comunes (ADR-012): un archivo aparte con hash en el nombre, nunca dentro de index.html.
+//   dist/data/common-nouns.<h8>.txt   copia exacta de src/model/data/common-nouns.txt
+// La página la recibe en `virtual:minoscreto-data` como COMMON_NOUNS_FILE = { url, sha256 } (hex).
+// Fuera del build (dev, tests) es null: no hay lista y todo funciona como sin ella.
+const DATA_ID = 'virtual:minoscreto-data';
+const COMMON_NOUNS_SRC = 'src/model/data/common-nouns.txt';
+
+function commonNounsAsset() {
+  let isBuild = false;
+  let root;
+  let file = null;
+  return {
+    name: 'minoscreto-common-nouns-asset',
+    configResolved(config) {
+      isBuild = config.command === 'build' && !config.build.ssr;
+      root = config.root;
+    },
+    buildStart() {
+      if (!isBuild) return;
+      const source = readFileSync(resolve(root, COMMON_NOUNS_SRC));
+      const sha256 = createHash('sha256').update(source).digest('hex');
+      file = { fileName: `data/common-nouns.${sha256.slice(0, 8)}.txt`, source, sha256 };
+    },
+    resolveId(id) {
+      return id === DATA_ID ? `\0${DATA_ID}` : null;
+    },
+    load(id) {
+      if (id !== `\0${DATA_ID}`) return null;
+      if (!file) return 'export const COMMON_NOUNS_FILE = null;\n';
+      return `export const COMMON_NOUNS_FILE = ${JSON.stringify({ url: `/${file.fileName}`, sha256: file.sha256 })};\n`;
+    },
+    generateBundle() {
+      if (file) this.emitFile({ type: 'asset', fileName: file.fileName, source: file.source });
+    }
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), { ...viteSingleFile(), apply: 'build' }, engineAsset(), cspHeaders()],
+  plugins: [react(), { ...viteSingleFile(), apply: 'build' }, engineAsset(), commonNounsAsset(), cspHeaders()],
   test: {
     environment: 'jsdom',
     globals: true,

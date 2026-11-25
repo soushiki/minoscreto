@@ -124,6 +124,26 @@ describe('ADR-004: engine stays out of the page', () => {
   });
 });
 
+describe('ADR-012: the common-word list is a separate same-origin file', () => {
+  it('emits data/common-nouns.<sha8>.txt, named by its SHA-256, and index.html carries the pair the loader checks', () => {
+    const names = readdirSync(join(outDir, 'data'));
+    expect(names).toHaveLength(1);
+    expect(names[0]).toMatch(/^common-nouns\.[0-9a-f]{8}\.txt$/);
+    const bytes = readFileSync(join(outDir, 'data', names[0]));
+    const hash = sha256(bytes);
+    expect(names[0].split('.')[1]).toBe(hash.slice(0, 8));
+    expect(hash).toBe(sha256(readFileSync(resolve(root, 'src/model/data/common-nouns.txt'))));
+    const q = '["\'`]';
+    expect(html).toMatch(new RegExp(`${q}?url${q}?:${q}/data/${names[0].replace(/\./g, '\\.')}${q},${q}?sha256${q}?:${q}${hash}${q}`));
+  });
+
+  it('the word list is not inlined in index.html', () => {
+    expect(html).not.toContain('\nempresa\n');
+    expect(html).not.toContain('# This list is CC BY-SA 4.0');
+    expect(html).not.toContain('Filtered with LibreOffice es_CO');
+  });
+});
+
 describe('S2: CSP changes only by wasm-unsafe-eval and connect-src self', () => {
   it('matches the expected policy exactly, apart from the script hashes', () => {
     const headers = readFileSync(join(outDir, '_headers'), 'utf8');

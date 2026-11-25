@@ -5,6 +5,7 @@ import {
 } from '../model/index.js';
 import { anonymizerReducer, initialState } from './anonymizerState.js';
 import { useProtectedDownload } from './useProtectedDownload.js';
+import { ensureCommonNouns } from './commonNouns.js';
 
 const EMPTY_HITS = { list: [], byParagraph: new Map() };
 const categoriesFlat = (categories) => Object.values(categories).flat();
@@ -59,6 +60,7 @@ export function useAnonymizer({ save, notify }) {
 
   const loadBuffer = useCallback(async (buffer, name, isSample) => {
     const opened = await openDocx(buffer);
+    await ensureCommonNouns(); // la lista de palabras comunes debe estar puesta antes de detectar (ADR-012)
     if (!opened.paragraphs.some((p) => p.text.trim())) {
       notify('Este Word no tiene texto para revisar.', true);
       return false;

@@ -1,10 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useToast } from './viewmodels/useToast.js';
 import { useDownloads } from './viewmodels/useDownloads.js';
 import { useAnonymizer } from './viewmodels/useAnonymizer.js';
 import { useRestorer } from './viewmodels/useRestorer.js';
 import { useExpediente } from './viewmodels/useExpediente.js';
 import { useWelcome } from './viewmodels/useWelcome.js';
+import { ensureCommonNouns } from './viewmodels/commonNouns.js';
 import { useFileDrop } from './utils/useFileDrop.js';
 import Header from './views/Header.jsx';
 import AnonymizeScreen from './views/AnonymizeScreen.jsx';
@@ -24,6 +25,8 @@ export default function App() {
   const expediente = useExpediente({ save, notify: show });
   // De qué pantalla viene el diccionario que ofrece Restaurar: la última que se usó.
   const [source, setSource] = useState('anonymize');
+  // Calienta la lista de palabras comunes mientras el usuario lee la bienvenida; el resultado se usa más tarde.
+  useEffect(() => { ensureCommonNouns(); }, []);
 
   const { closePopover } = anonymizer.actions;
   const changeScreen = useCallback((next) => {

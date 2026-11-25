@@ -118,6 +118,7 @@ export default function WelcomeScreen({ vm }) {
         <section className="card wl-card" aria-live="polite">
           <Step vm={vm} />
         </section>
+        <p className="wl-credit">Lista de palabras comunes: <a href="https://github.com/hermitdave/FrequencyWords" target="_blank" rel="noopener noreferrer">FrequencyWords</a> de Hermit Dave (<a href="https://creativecommons.org/licenses/by-sa/4.0/deed.es" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>).</p>
       </div>
     </main>
   );
