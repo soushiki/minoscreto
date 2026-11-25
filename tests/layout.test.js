@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { createPdfRuntime } from '@embedpdf/engine-runtime';
 import { createPdfium } from '../src/engine-worker/pdfium.js';
 import { buildEntities } from '../src/model/index.js';
-import { itemsToLines, findTableHints } from '../src/model/expediente/index.js';
+import { itemsToLines, findTableHints, joinFormPairs, linesToParagraphs, buildDocument } from '../src/model/expediente/index.js';
 import { classifyPage, SCAN_RULES } from '../src/model/layout/scan.js';
 
 const fixtures = resolve(__dirname, 'fixtures');
@@ -143,5 +143,59 @@ describe('calibración de SCAN_RULES con PDFium (T12)', () => {
   ])('%s → %s', (name, expected) => {
     const pages = measure(name);
     for (const stats of pages) expect(classifyPage(stats)).toBe(expected);
+  });
+});
+
+// Formulario de dos columnas: pdf.js entrega primero los valores y después las etiquetas.
+const fl = (text, x, y, right, h = 8) => ({ text, x, y, h, right, cells: [{ text, x, right }] });
+const formLines = () => [
+  fl('Cédula de Ciudadanía', 122, 726.63, 210), fl('1047234567', 122, 716.63, 170), fl('MARTA LUCIA PEREZ GOMEZ', 122, 706.63, 250),
+  fl('CALLE 45 # 12-30 ED TORRES DE PINARES', 122, 696.63, 300), fl('Activo', 122, 686.63, 145),
+  fl('09/02/1975', 414, 727.63, 460), fl('01/02/2020', 414, 716.63, 460), fl('ana@example.com', 414, 706.63, 490),
+  fl('INFORME DE AFILIACIÓN', 200, 760, 400, 12),
+  fl('Tipo de Documento:', 31, 726.63, 103), fl('Número de Documento:', 31, 716.63, 115.9), fl('Nombre:', 31, 706.63, 61.7),
+  fl('Dirección:', 31, 696.63, 66.6), fl('Estado Afiliación:', 31, 686.63, 92.4),
+  fl('Fecha de Nacimiento:', 315, 726.63, 392.8), fl('Fecha de Afiliación:', 315, 716.63, 390), fl('Correo:', 315, 706.63, 345)
+];
+
+describe('joinFormPairs: etiqueta y valor al lado', () => {
+  it('une cada etiqueta con su valor, sin usar un valor dos veces', () => {
+    const out = joinFormPairs(formLines());
+    const texts = out.map((l) => l.text);
+    expect(texts).toContain('Nombre: MARTA LUCIA PEREZ GOMEZ');
+    expect(texts).toContain('Dirección: CALLE 45 # 12-30 ED TORRES DE PINARES');
+    expect(texts).toContain('Fecha de Nacimiento: 09/02/1975');
+    expect(texts).toContain('Fecha de Afiliación: 01/02/2020');
+    expect(texts).toContain('Correo: ana@example.com');
+    expect(texts).toContain('Tipo de Documento: Cédula de Ciudadanía');
+    expect(texts).toContain('Estado Afiliación: Activo');
+    expect(texts).toContain('Número de Documento: 1047234567');
+    expect(out.length).toBe(formLines().length - 8);
+    expect(texts).toContain('INFORME DE AFILIACIÓN');
+    const pair = out.find((l) => l.text === 'Nombre: MARTA LUCIA PEREZ GOMEZ');
+    expect(pair).toMatchObject({ x: 31, y: 706.63, right: 250, pair: true });
+    expect(pair.cells.map((c) => c.text)).toEqual(['Nombre:', 'MARTA LUCIA PEREZ GOMEZ']);
+  });
+  it('no cambia la entrada y deja intactas las líneas sin pareja', () => {
+    const input = formLines();
+    const copy = JSON.stringify(input);
+    joinFormPairs(input);
+    expect(JSON.stringify(input)).toBe(copy);
+    const out = joinFormPairs([fl('Teléfono:', 31, 600, 80), fl('Otra cosa', 31, 500, 100)]);
+    expect(out.map((l) => l.text)).toEqual(['Teléfono:', 'Otra cosa']);
+    expect(out[0].pair).toBeUndefined();
+  });
+  it('no une un valor más lejos de 12 veces la altura', () => {
+    const out = joinFormPairs([fl('Nombre:', 31, 600, 61.7), fl('LEJOS', 61.7 + 8 * 12 + 1, 600, 300)]);
+    expect(out.map((l) => l.text)).toEqual(['Nombre:', 'LEJOS']);
+  });
+  it('cada pareja es su propio párrafo', () => {
+    const lines = [fl('Nombre:', 31, 700, 61.7), fl('ANA', 122, 700, 140), fl('Dirección:', 31, 690, 66), fl('CALLE 1', 122, 690, 170), fl('texto suelto aparte', 31, 680, 140)];
+    const paragraphs = linesToParagraphs(joinFormPairs(lines));
+    expect(paragraphs).toEqual(['Nombre: ANA', 'Dirección: CALLE 1', 'texto suelto aparte']);
+  });
+  it('buildDocument aplica la unión a las páginas', () => {
+    const doc = buildDocument([{ number: 1, lines: formLines() }]);
+    expect(doc.paragraphs.map((p) => p.text)).toContain('Nombre: MARTA LUCIA PEREZ GOMEZ');
   });
 });

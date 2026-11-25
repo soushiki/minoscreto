@@ -1,4 +1,4 @@
-import { linesToParagraphs, isHeading, joinText, continuesOnNextPage } from './layout.js';
+import { linesToParagraphs, isHeading, joinText, continuesOnNextPage, joinFormPairs } from './layout.js';
 import { reducePages } from './reduce.js';
 import { fixDigitConfusions } from './ocr.js';
 import { findTableHints } from './tables.js';
@@ -22,7 +22,8 @@ export function findEmptyPages(pages) {
  */
 export function buildDocument(pages, { reduce = false, fixOcr = true } = {}) {
   const empty = new Set(findEmptyPages(pages));
-  const source = reducePages(pages, { junk: reduce });
+  // Etiqueta y valor de un formulario se unen antes de reducir, para que top/bottom/lines salgan coherentes; las pistas de tablas usan `pages` tal cual.
+  const source = reducePages(pages.map((p) => ({ ...p, lines: joinFormPairs(p.lines) })), { junk: reduce });
   const paragraphs = [];
   let ocrFixes = 0;
   let pageJoins = 0;
@@ -35,15 +36,16 @@ export function buildDocument(pages, { reduce = false, fixOcr = true } = {}) {
     ocrFixes += fixed.fixes;
     return fixed.text;
   };
-  const make = (text, page) => ({ text, page, endPage: page, heading: isHeading(text) });
+  const make = (text, page, pair) => ({ text, page, endPage: page, heading: isHeading(text), ...(pair ? { pair } : {}) });
   const furniture = (lines, page) => (reduce ? [] : lines.map((l) => make(l.text, page)));
 
   for (const page of source.pages) {
     if (empty.has(page.number)) { paragraphs.push(...deferred); deferred = []; lastBody = null; continue; }
-    const body = linesToParagraphs(page.lines).map(clean);
+    const found = linesToParagraphs(page.lines, { flags: true });
+    const body = found.map((p) => clean(p.text));
     const top = furniture(page.top, page.number);
     let start = 0;
-    if (body.length && lastBody && lastBody.endPage === page.number - 1 && continuesOnNextPage(lastBody.text, body[0])) {
+    if (body.length && !found[0].pair && !lastBody?.pair && lastBody && lastBody.endPage === page.number - 1 && continuesOnNextPage(lastBody.text, body[0])) {
       lastBody.text = joinText(lastBody.text, body[0]);
       // `at`: dónde empieza en el texto unido lo que venía en este folio (joinText deja `b` entero al final).
       (lastBody.joins ??= []).push({ at: lastBody.text.length - body[0].length, page: page.number });
@@ -53,7 +55,7 @@ export function buildDocument(pages, { reduce = false, fixOcr = true } = {}) {
     }
     paragraphs.push(...deferred, ...top);
     for (let i = start; i < body.length; i++) {
-      lastBody = make(body[i], page.number);
+      lastBody = make(body[i], page.number, found[i].pair);
       paragraphs.push(lastBody);
     }
     deferred = furniture(page.bottom, page.number);

@@ -233,3 +233,26 @@ describe('variantes por aparición', () => {
     expect(Object.getPrototypeOf(v)).toBe(Object.prototype);
   });
 });
+
+describe('mismo nombre en otro orden y fechas con pista', () => {
+  const personas = (texts) => buildEntities(texts.map((text) => ({ text }))).filter((e) => e.type === 'PERSONA');
+  it('une el mismo nombre con las palabras en otro orden', () => {
+    const list = personas(['Nombre: MARTA LUCIA PEREZ GOMEZ.', 'Titular: PEREZ GOMEZ MARTA LUCIA.']);
+    expect(list).toHaveLength(1);
+    expect(list[0].value).toBe('MARTA LUCIA PEREZ GOMEZ');
+    expect(list[0].aliases).toContain('PEREZ GOMEZ MARTA LUCIA');
+  });
+  it('no une nombres con conjuntos de palabras distintos', () => {
+    const list = personas(['Nombre: ANA MARIA GOMEZ.', 'Titular: ANA GOMEZ.']);
+    expect(list.filter((e) => e.aliases.includes('ANA GOMEZ') && e.value === 'ANA MARIA GOMEZ')).toHaveLength(0);
+  });
+  const fechas = (text) => buildEntities([{ text }]).filter((e) => e.type === 'FECHA').map((e) => [e.value, e.enabled]);
+  it.each([
+    ['Fecha de Nacimiento: 09/02/1975', [['09/02/1975', true]]],
+    ['Fecha de expedición 3 de mayo de 2001', [['3 de mayo de 2001', true]]],
+    ['Fecha de Afiliación: 01/02/2020', [['01/02/2020', false]]],
+    ['Periodo 01/01/2000', [['01/01/2000', false]]]
+  ])('%s', (text, expected) => {
+    expect(fechas(text)).toEqual(expected);
+  });
+});

@@ -1,4 +1,4 @@
-export { itemsToLines, linesToParagraphs, isHeading } from './layout.js';
+export { itemsToLines, linesToParagraphs, isHeading, joinFormPairs } from './layout.js';
 export { reducePages, isJunk, isPageNumber } from './reduce.js';
 export { buildDocument, findEmptyPages, formatPageRanges, estimateTokens } from './document.js';
 export { findTableHints } from './tables.js';

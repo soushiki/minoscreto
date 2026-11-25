@@ -92,7 +92,7 @@ function detectAcrossBreaks(paragraphs, context) {
     let j = i;
     while (j + 1 < texts.length && j - i + 1 < MAX_CHAIN && texts[j] && texts[j + 1]
       && (texts[j].length <= MAX_PIECE_LINE || texts[j + 1].length <= MAX_PIECE_LINE)
-      && OPEN_END.test(texts[j]) && CONTINUES.test(texts[j + 1])) j++;
+      && !paragraphs[j].pair && !paragraphs[j + 1].pair && OPEN_END.test(texts[j]) && CONTINUES.test(texts[j + 1])) j++;
     if (j > i) {
       let joined = '';
       const spans = [];
@@ -136,11 +136,13 @@ export function buildEntities(paragraphs, { names = true, hints = [] } = {}) {
         // Un nombre visto primero con señal débil se confirma si luego aparece con señal fuerte.
         if (existing.weak && !d.weak) { delete existing.weak; existing.enabled = TYPE_BY_ID[existing.type].on; }
         if ((d.score || 0) > (existing.score || 0)) existing.score = d.score;
+        if (d.personal) existing.enabled = true;
         continue;
       }
       const entity = createEntity(list, d.type, value);
       if (d.score !== undefined) entity.score = d.score;
       if (d.weak) { entity.weak = true; entity.enabled = false; }
+      if (d.personal) entity.enabled = true;
       byKey.set(key, entity);
       list.push(entity);
     }
@@ -211,6 +213,17 @@ export function buildEntities(paragraphs, { names = true, hints = [] } = {}) {
     if (tokens.length !== 1) continue;
     const host = people.find((o) => o !== e && !merged.has(o) && normKey(o.value).split(' ').length >= 2 && normKey(o.value).split(' ').includes(tokens[0]));
     if (host) { host.aliases.push(e.value); merged.add(e); }
+  }
+  // El mismo nombre con las palabras en otro orden («CLARO JAIME KATIA ESTHER» en tablas) es una sola persona.
+  const sortedWords = (e) => normKey(e.value).split(' ').sort().join(' ');
+  for (const e of people) {
+    if (merged.has(e) || normKey(e.value).split(' ').length < 2) continue;
+    for (const o of people) {
+      if (o === e || merged.has(o) || normKey(o.value) === normKey(e.value) || sortedWords(o) !== sortedWords(e)) continue;
+      for (const v of [o.value, ...o.aliases]) if (!e.aliases.some((a) => normKey(a) === normKey(v)) && normKey(v) !== normKey(e.value)) e.aliases.push(v);
+      e.enabled = e.enabled || o.enabled;
+      merged.add(o);
+    }
   }
   const rest = dropNamesCoveredByOthers(list.filter((e) => !merged.has(e)));
   return mergeCueVariants(rest, byKey);

@@ -437,3 +437,37 @@ describe('PDF con contraseña (C1, R1, S1)', () => {
     expect(code).not.toMatch(/\bpassword\w*\s*=(?!=)/i);
   });
 });
+
+describe('formulario de pensión de dos columnas', () => {
+  const f = (text, x, y, right) => ({ text, x, y, h: 8, right, cells: [{ text, x, right }] });
+  const lines = [
+    f('Cédula de Ciudadanía', 122, 726.63, 210), f('1047234567', 122, 716.63, 170), f('MARTA LUCIA PEREZ GOMEZ', 122, 706.63, 250),
+    f('CALLE 45 # 12-30 ED TORRES DE PINARES', 122, 696.63, 300), f('Activo', 122, 686.63, 145),
+    f('09/02/1975', 414, 727.63, 460), f('01/02/2020', 414, 716.63, 460), f('ana@example.com', 414, 706.63, 490),
+    f('Tipo de Documento:', 31, 726.63, 103), f('Número de Documento:', 31, 716.63, 115.9), f('Nombre:', 31, 706.63, 61.7),
+    f('Dirección:', 31, 696.63, 66.6), f('Estado Afiliación:', 31, 686.63, 92.4),
+    f('Fecha de Nacimiento:', 315, 726.63, 392.8), f('Fecha de Afiliación:', 315, 716.63, 390), f('Correo:', 315, 706.63, 345)
+  ];
+  it('detecta nombre, dirección completa y fecha de nacimiento activa; la de afiliación no', () => {
+    const doc = buildDocument([{ number: 1, lines }]);
+    const entities = buildEntities(doc.paragraphs, { hints: doc.hints });
+    const by = (type) => entities.filter((e) => e.type === type);
+    expect(by('PERSONA').map((e) => e.value)).toContain('MARTA LUCIA PEREZ GOMEZ');
+    expect(by('DIRECCION').map((e) => e.value)).toEqual(['CALLE 45 # 12-30 ED TORRES DE PINARES']);
+    const dates = Object.fromEntries(by('FECHA').map((e) => [e.value, e.enabled]));
+    expect(dates).toEqual({ '09/02/1975': true, '01/02/2020': false });
+  });
+});
+
+describe('pares de formulario no se encadenan', () => {
+  const f = (text, x, y, right) => ({ text, x, y, h: 8, right, cells: [{ text, x, right }] });
+  it('la dirección termina en PINARES aunque siga otra etiqueta', () => {
+    const lines = [
+      f('CALLE 45 # 12-30 ED TORRES DE PINARES', 122, 696.63, 300), f('Activo', 122, 686.63, 145),
+      f('Dirección:', 31, 696.63, 66.6), f('Estado Afiliación:', 31, 686.63, 92.4)
+    ];
+    const doc = buildDocument([{ number: 1, lines }]);
+    const found = buildEntities(doc.paragraphs).filter((e) => e.type === 'DIRECCION').map((e) => e.value);
+    expect(found).toEqual(['CALLE 45 # 12-30 ED TORRES DE PINARES']);
+  });
+});

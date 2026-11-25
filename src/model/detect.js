@@ -237,6 +237,8 @@ function detectPeopleAndPrefixedOrgs(text, claims) {
   }
 }
 
+const BIRTH_CUE = /(nacimiento|nacid[oa]|natal|expedici[oó]n|expedid[oa])\b[^.\n]{0,30}$/iu;
+
 /** Con `context` (de buildNameContext, todo el documento) también busca nombres propios y lugares. */
 export function detect(text, context = null) {
   const claims = makeClaims(text.length);
@@ -251,5 +253,7 @@ export function detect(text, context = null) {
       if (claims.isFree(d.start, d.end)) claims.claim(d.start, d.end, d.type, d.weak ? SCORES.weak : SCORES.properNoun);
     }
   }
+  // Una fecha de nacimiento o de expedición con su pista delante nace marcada; las demás fechas siguen apagadas.
+  for (const d of claims.found) if (d.type === 'FECHA' && BIRTH_CUE.test(text.slice(Math.max(0, d.start - 40), d.start))) d.personal = true;
   return claims.found.sort((p, q) => p.start - q.start);
 }

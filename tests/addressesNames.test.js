@@ -222,3 +222,13 @@ describe('nombre de pila en minúscula o apellido en minúscula', () => {
     }
   });
 });
+
+describe('direcciones: edificio abreviado «ED»', () => {
+  it.each([
+    ['Dirección: CALLE 45 # 12-30 ED TORRES DE PINARES', 'CALLE 45 # 12-30 ED TORRES DE PINARES'],
+    ['Vive en la Cra 7 # 71-21 Ed. Los Pinos.', 'Cra 7 # 71-21 Ed. Los Pinos'],
+    ['Dirección: CALLE 45 # 12-30 EDUARDO', 'CALLE 45 # 12-30']
+  ])('%s', (text, expected) => {
+    expect(addresses(text)).toEqual([expected]);
+  });
+});

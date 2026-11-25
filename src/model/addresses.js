@@ -21,7 +21,7 @@ const ROAD = new RegExp(`${B}(?:km|kil[oó]metro)\\.?\\s*\\d{1,3}(?:[.,]\\d{1,3}
 // Lo que sigue a la dirección: «Apto 502», «Torre 3», «Int. 2», «Of. 301», «Piso 4», «Local 12B».
 const UNIT = /^\s*,?\s*(?:apartamento|apto|apt|torre|interior|int|bloque|bl|casa|oficina|of|local|piso|consultorio|etapa|manzana|mz|lote)\.?\s*(?:#|no\.?|n[°º]\.?)?\s*(?:\d[\p{L}\p{N}]{0,4}|[a-z](?![\p{L}]))(?![\p{L}\p{N}])/iu;
 // Y un nombre: «, Barrio La Floresta», «Conjunto Los Pinos», «vereda El Salitre».
-const PLACE = /^\s*,?\s*(?:barrio|br|conjunto|conj|urbanizaci[oó]n|urb|edificio|edif|vereda|sector)\.?\s+/iu;
+const PLACE = /^\s*,?\s*(?:barrio|br|conjunto|conj|urbanizaci[oó]n|urb|edificio|edif|ed|vereda|sector)\.?\s+/iu;
 const NAME_LINKS = new Set(['de', 'del', 'la', 'las', 'los', 'el']);
 
 /** Lee hasta 4 palabras de un nombre desde `from` («La Floresta», «el prado»); devuelve dónde termina (`from` si no hay). */
