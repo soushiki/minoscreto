@@ -442,7 +442,7 @@ describe('PasswordDialog + usePasswordPrompt (T7: R1, A1, S1, S3)', () => {
   }, 20000);
 
   it('ADR-002 (grep): el hook y el diálogo no tocan almacenamiento, consola, URL ni red, ni guardan la contraseña', () => {
-    for (const file of ['src/viewmodels/usePasswordPrompt.js', 'src/components/PasswordDialog.jsx']) {
+    for (const file of ['src/viewmodels/usePasswordPrompt.js', 'src/components/PasswordDialog.jsx', 'src/model/layout/unlock.js']) {
       const code = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
       expect(code, `ADR-002: password code must not touch storage, logs or network (${file})`)
         .not.toMatch(/localStorage|sessionStorage|indexedDB|console\.|location|fetch\(|XMLHttpRequest|sendBeacon|innerHTML/);

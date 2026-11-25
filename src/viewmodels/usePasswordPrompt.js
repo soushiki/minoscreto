@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  *
  * askPassword({ fileName, reason: 'need'|'incorrect'|'layout', signal }) abre el diálogo y responde con lo escrito o con
  * null (Cancelar, Escape, signal cancelado, otra pregunta nueva o el componente desmontado). Se entrega tal cual
- * al onPassword de pdf.js (readPdfPages). 'layout': se pide otra vez para hacer el PDF con diseño (ADR-007).
+ * al onPassword de pdf.js (readPdfPages). 'layout': solo de respaldo, si no se pudo quitar la contraseña al cargar (ADR-009, antes ADR-007).
  *
  * El estado solo guarda { fileName, reason, attempt, checking }: nunca la contraseña. Tras responder, el diálogo
  * sigue abierto en «Comprobando…» hasta que pdf.js vuelva a preguntar (contraseña incorrecta), el signal se cancele

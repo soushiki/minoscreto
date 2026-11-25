@@ -126,15 +126,24 @@ export function useExpediente({ save, notify }) {
     // Copia antes de pdf.js (puede quedarse con el buffer): es lo que abre el motor del PDF con diseño.
     const bytes = new Uint8Array(buffer.slice(0));
     let hadPassword = false;
+    let typed = null; // la última contraseña escrita: la que pdf.js aceptó. Se suelta al terminar (ADR-009).
     let lastPaint = 0;
     const pages = await readPdfPages(new Uint8Array(buffer), {
       signal,
-      askPassword: (options) => { hadPassword = true; return askPassword(options); },
+      askPassword: async (options) => { hadPassword = true; typed = await askPassword(options); return typed; },
       fileName: file.name,
       onProgress: (done, total) => {
         if (done === total || now() - lastPaint > 80) { lastPaint = now(); dispatch({ type: 'progress', done, total }); }
       }
     });
+    if (hadPassword && typeof typed === 'string') {
+      // ADR-009: se abre una vez con la contraseña y se guarda la copia sin clave; el PDF con diseño ya no la pide.
+      try {
+        const { unlockPdf } = await import('../model/layout/unlock.js');
+        const unlocked = await unlockPdf({ bytes, password: typed, signal });
+        return { pages, original: { bytes: unlocked, hadPassword: false } };
+      } catch { /* sin motor o sin abrir: queda el camino de ADR-007 (se pide al descargar) */ } finally { typed = null; }
+    }
     return { pages, original: { bytes, hadPassword } };
   }, [askPassword]);
 
@@ -186,8 +195,8 @@ export function useExpediente({ save, notify }) {
   const cancel = useCallback(() => { abort.current?.abort(); source.current = null; dispatch({ type: 'failed' }); }, []);
 
   /**
-   * PDF con diseño original (R1–R10): motor primero (si no carga, sin preguntar nada), la contraseña otra vez si el
-   * archivo la tenía (ADR-007), luego protectLayout. Responde { bytes, imagePages }, { fallback: aviso } o 'aborted'
+   * PDF con diseño original (R1–R10): motor primero (si no carga, sin preguntar nada), luego protectLayout. La
+   * contraseña solo se pide otra vez si no se pudo quitar al cargar el archivo (ADR-009; respaldo de ADR-007). Responde { bytes, imagePages }, { fallback: aviso } o 'aborted'
    * (otro archivo o pantalla cerrada: no se descarga nada).
    */
   const makeLayout = useCallback(async (original) => {

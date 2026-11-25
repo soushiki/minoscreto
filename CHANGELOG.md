@@ -1,13 +1,18 @@
 # Changelog
 
-## 0.5.0 — sin publicar
+## 0.5.1 — 2026-11-25
+### Corregido
+- PDF con diseño en documentos con renglones muy juntos: al borrar un dato ya no se pierde texto del renglón vecino (antes se bajaba el PDF de texto).
+- PDF con contraseña: se pide una sola vez, al cargarlo; el PDF con diseño ya no la vuelve a pedir al descargar.
+
+## 0.5.0 — 2026-11-25
 ### Añadido
 - PDF con su diseño original al proteger: cada dato se borra de verdad de la página y su etiqueta queda en su sitio, también los datos partidos entre dos líneas o entre dos páginas.
 - Revisión final: el PDF con diseño solo se descarga si no queda ningún dato en él. Si no, se baja el PDF de texto de antes, con un mensaje que explica por qué.
 - Motivos del respaldo en texto: páginas escaneadas (dice cuáles), dato que no se pudo cambiar, motor que no cargó o archivo muy grande.
 - Aviso de las páginas con imágenes, para que se revisen a mano.
 - Del PDF protegido se quitan metadatos, formularios, anotaciones, adjuntos y elementos similares.
-- PDF con contraseña: se pide de nuevo al descargar con diseño, y el PDF protegido sale sin contraseña.
+- PDF con contraseña: se pide de nuevo al descargar con diseño, y el PDF protegido sale sin contraseña (desde 0.5.1 se pide una sola vez).
 - Restaurar también conserva el diseño, tanto con nuestro PDF como con el que devolvió la IA, con el mismo respaldo de texto y su mensaje.
 - El motor de PDF (≈3,2 MB) se descarga solo la primera vez que se necesita, desde el mismo sitio; mientras se prepara se ve una barra de carga y el avance por página.
 - Vista previa del enlace al compartirlo (Open Graph), `robots.txt`, sitemap e ícono del sitio.

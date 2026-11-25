@@ -553,10 +553,31 @@ describe('PDF con diseño original (T11)', () => {
     expect(loadSpy).not.toHaveBeenCalled();
   }, 40000);
 
-  describe('PDF con contraseña: se pide otra vez (ADR-007)', () => {
+  describe('PDF con contraseña: se pide una sola vez (ADR-009)', () => {
     const dialogOpen = () => document.querySelector('dialog').hasAttribute('open');
+
+    it('la contraseña escrita al cargar basta: el PDF con diseño sale sin una segunda pregunta', async () => {
+      const user = userEvent.setup();
+      useEngine();
+      await load(user, fixtureFile('contrasena_usuario_sintetico.pdf'), { password: PASSWORD });
+      await waitFor(() => expect(dialogOpen()).toBe(false));
+      await descargar(user);
+      await pairDone();
+      expect(dialogOpen()).toBe(false);
+      expect(document.querySelector('dialog').textContent).not.toContain('Escríbala otra vez');
+      expect(fallback()).toBeNull();
+      expect(receipt()).toContain(LAYOUT_OK);
+    }, 40000);
+  });
+
+  describe('PDF con contraseña: si no se pudo quitar al cargar, se pide otra vez (ADR-007, respaldo)', () => {
+    const dialogOpen = () => document.querySelector('dialog').hasAttribute('open');
+    // El motor falla solo en la primera carga (la del desbloqueo al cargar); después funciona.
     const startLayout = async (user) => {
       useEngine();
+      const working = engine.load;
+      let first = true;
+      engine.load = async (...args) => { if (first) { first = false; throw new Error('sin motor al cargar'); } return working(...args); };
       await load(user, fixtureFile('contrasena_usuario_sintetico.pdf'), { password: PASSWORD });
       await waitFor(() => expect(dialogOpen()).toBe(false));
       await descargar(user);

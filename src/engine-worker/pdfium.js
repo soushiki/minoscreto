@@ -17,6 +17,7 @@ const NULL = 0n; // los punteros del runtime son BigInt
 const TAG_COLOR = [0, 0, 0, 255]; // negro (R3; usuario, 2026-11-24)
 const OLD_TAG_COLOR = [13, 92, 74, 255]; // verde de las etiquetas de prueba anteriores: al restaurar también pasa a negro
 const TAG_MIN_SCALE = 0.6; // la etiqueta se encoge para caber en el ancho del valor, hasta el 60 % (ADR-008)
+const COLLATERAL_ROUNDS = 8; // vueltas máximas para añadir texto vecino que la redacción también borraría
 const TAG_SLACK = 6; // puntos de holgura sobre el ancho del valor (si detrás viene un espacio no se usa: ver newTag)
 const TAG = /^\[[\x21-\x5c\x5e-\x7e]{1,60}\]$/; // etiqueta [TIPO_n]: ASCII visible (Helvetica), sin «]» dentro
 const MAX_NEEDLES = 5000;
@@ -327,7 +328,8 @@ export function createPdfium({ fn, mem }) {
         return rects;
       };
 
-      const plans = planEdits(found, objOf, count, topLevel, index, restore ? swallowClipped : undefined);
+      const charBox = (i) => (fn.FPDFText_GetCharBox(textPage, i, d[0], d[1], d[2], d[3]) ? d.map(f64) : null); // left, right, bottom, top
+      const plans = planEdits(found, objOf, count, topLevel, index, (all) => { if (restore) swallowClipped(all); swallowCollateral(all); });
       // Todo lo que se va a volver a poner se mide antes de borrar: después ya no está.
       for (const plan of plans) {
         plan.seq = [];
@@ -350,7 +352,6 @@ export function createPdfium({ fn, mem }) {
       // Restaurar: la etiqueta de protect puede ser más ancha que su valor y pisar al objeto vecino (ADR-008, TAG_SLACK):
       // el borrado lo recortaría, así que el tramo lo incluye entero y se vuelve a poner como el resto de la línea.
       function swallowClipped(plans) {
-        const charBox = (i) => (fn.FPDFText_GetCharBox(textPage, i, d[0], d[1], d[2], d[3]) ? d.map(f64) : null); // left, right, bottom, top
         for (let n = 0; n < plans.length; n++) {
           const plan = plans[n];
           for (let again = true; again;) {
@@ -377,6 +378,44 @@ export function createPdfium({ fn, mem }) {
             const next = plans.splice(n + 1, 1)[0];
             plan.matches.push(...next.matches);
             plan.end = Math.max(plan.end, next.end);
+          }
+        }
+      }
+      // Interlineado muy justo: el rectángulo de redacción toca glifos de la línea vecina y la redacción también los borra.
+      // Esos caracteres, fuera de todo tramo, se añaden como tramos propios (sin valores) para volver a ponerlos.
+      function swallowCollateral(plans) {
+        for (let round = 0; round < COLLATERAL_ROUNDS; round++) {
+          const covered = new Uint8Array(count);
+          for (const plan of plans) covered.fill(1, plan.from, plan.end);
+          const rects = plans.flatMap((plan) => rectsOf(plan.from, plan.end));
+          let added = false;
+          for (let k = 0; k < count; k++) {
+            if (covered[k] || !objOf[k] || /\s/u.test(chars[k])) continue;
+            const box = charBox(k);
+            if (!box) continue;
+            const [left, right, bottom, top] = box;
+            const hit = rects.some(([l, t, r, b]) => Math.min(right, r) - Math.max(left, l) > 0 && Math.min(top, Math.max(t, b)) - Math.max(bottom, Math.min(t, b)) > 0);
+            if (!hit) continue;
+            let from = k;
+            while (from > 0 && (objOf[from - 1] === objOf[k] || !objOf[from - 1])) from--;
+            while (!objOf[from]) from++;
+            let end = k + 1;
+            while (end < count && (objOf[end] === objOf[k] || !objOf[end])) end++;
+            while (end > k + 1 && !objOf[end - 1]) end--;
+            plans.push({ from, end, first: objOf[from], matches: [] });
+            covered.fill(1, from, end);
+            added = true;
+          }
+          if (!added) return;
+          plans.sort((a, b) => a.from - b.from);
+          for (let n = 0; n < plans.length; n++) {
+            const cur = plans[n];
+            while (plans[n + 1] && plans[n + 1].from < cur.end) {
+              const next = plans.splice(n + 1, 1)[0];
+              cur.end = Math.max(cur.end, next.end);
+              cur.matches.push(...next.matches);
+            }
+            cur.matches.sort((a, b) => a.start - b.start);
           }
         }
       }

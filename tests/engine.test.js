@@ -380,6 +380,39 @@ describe('engine worker: editPage protect + save (T9, ADR-008)', () => {
     expect((await pdfjsLines(out))[0]).toEqual(['Demandante [PERSONA_1] contra', 'gjpqy línea de abajo muy pegada']);
   });
 
+  it('very tight leading (lines ~3 pt apart, 7 pt text): the neighbouring line is rewritten, nothing lost', async () => {
+    const bytes = await onePage((page, font) => {
+      page.drawText('Ciclo POST 94 Pago', { x: 50, y: 700, size: 7, font });
+      page.drawText('[24]Semana gjpqy Tiempos', { x: 50, y: 697, size: 7, font });
+    });
+    const pdfium = createPdfium(runtime);
+    pdfium.open(bytes);
+    expect(pdfium.editPage(0, { mode: 'protect', needles: [{ value: 'POST', put: '[NOMBRE_1]' }] })).toEqual({ replaced: 1 });
+    const out = pdfium.save();
+    pdfium.close();
+    const text = (await pdfjsLines(out)).flat().join('');
+    expect(text).toContain('[NOMBRE_1]');
+    expect(text).not.toContain('POST');
+    for (const ch of '[24]SemanagjpqyTiempos') expect(text).toContain(ch);
+    expect([...text.replace(/\s/g, '')].sort()).toEqual([...'Ciclo[NOMBRE_1]94Pago[24]SemanagjpqyTiempos'].sort());
+  });
+
+  it('very tight leading, three lines ~3 pt apart: every lower line survives', async () => {
+    const bytes = await onePage((page, font) => {
+      page.drawText('Ciclo POST 94 Pago', { x: 50, y: 700, size: 7, font });
+      page.drawText('[24]Semana gjpqy Tiempos', { x: 50, y: 697, size: 7, font });
+      page.drawText('Tercera gjpqy linea', { x: 50, y: 694, size: 7, font });
+    });
+    const pdfium = createPdfium(runtime);
+    pdfium.open(bytes);
+    expect(pdfium.editPage(0, { mode: 'protect', needles: [{ value: 'POST', put: '[NOMBRE_1]' }] })).toEqual({ replaced: 1 });
+    const out = pdfium.save();
+    pdfium.close();
+    const text = (await pdfjsLines(out)).flat().join('');
+    expect(text).not.toContain('POST');
+    expect([...text.replace(/\s/g, '')].sort()).toEqual([...'Ciclo[NOMBRE_1]94Pago[24]SemanagjpqyTiempos' + 'Terceragjpqylinea'].sort());
+  });
+
   it('a word split at the line end (prese-/nciado) is re-set with its real hyphen, not PDFium\'s code 2', async () => {
     const bytes = await onePage((page, font) => {
       page.drawText('El testigo Ana María Pérez Gómez afirmó haber prese-', { x: 50, y: 700, size: 12, font });
