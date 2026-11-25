@@ -101,6 +101,7 @@ export async function listTextualObjects(bytes) {
   const strings = [];
   const streams = [];
   const undecoded = [];
+  const encodedBodies = [];
 
   const roots = [ctx.trailerInfo.Root, ctx.trailerInfo.Info].filter(Boolean);
   for (const root of roots) {
@@ -112,6 +113,7 @@ export async function listTextualObjects(bytes) {
         // Un error al decodificar un filtro conocido (flujo dañado) se propaga: el control falla cerrado.
         if (names.every((n) => n instanceof PDFName && DECODABLE.has(n.decodeText()))) {
           streams.push(decodePDFRawStream(obj).decode());
+          if (names.length) encodedBodies.push(obj.contents);
         } else {
           undecoded.push({ filter: names.map(String).join(' ') });
         }
@@ -128,5 +130,5 @@ export async function listTextualObjects(bytes) {
     for (const k of extraKeys(node, ALLOWED_PAGE_KEYS)) forbidden.push(`pagenode${i + 1}/${k}`);
   });
 
-  return { strings, streams, undecoded, forbidden };
+  return { strings, streams, undecoded, forbidden, encodedBodies };
 }

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { deflateSync } from 'node:zlib';
 import { describe, it, expect, vi } from 'vitest';
 import { PDFDocument, PDFName, PDFHexString, PDFString, StandardFonts } from 'pdf-lib';
 import { scrubPdf } from '../src/model/pdf/scrub.js';
@@ -116,6 +117,45 @@ describe('verifyProtected (R2, R4, S7, ADR-006)', () => {
     // Un «%%EOF» suelto dentro de un flujo no es una revisión.
     const inStream = await makePdf(CLEAN, { extra: (doc, page) => unusedForm(doc, page, '% texto\n%%EOF\n', { flate: false }) });
     expect(await verifyProtected(inStream, ENTITIES)).toEqual({ ok: true });
+  });
+
+  // Una corrida de 3 letras (sin letras/dígitos pegados) dentro de los bytes comprimidos y ausente del texto.
+  function chanceRun() {
+    const isAlnum = (b) => b !== undefined && ((b >= 48 && b <= 57) || (b >= 65 && b <= 90) || (b >= 97 && b <= 122));
+    const isLetter = (b) => (b >= 65 && b <= 90) || (b >= 97 && b <= 122);
+    for (let i = 0; i < 5000; i++) {
+      const nums = Array.from({ length: 60 }, (_, j) => (i * 7919 + j * 104729) % 9973).join(' ');
+      const content = `BT /F1 1 Tf (filler ${i} ${nums}) Tj ET`;
+      const packed = new Uint8Array(deflateSync(Buffer.from(content, 'latin1')));
+      for (let k = 0; k + 3 <= packed.length; k++) {
+        if (!isLetter(packed[k]) || !isLetter(packed[k + 1]) || !isLetter(packed[k + 2])) continue;
+        if (isAlnum(packed[k - 1]) || isAlnum(packed[k + 3])) continue;
+        const run = String.fromCharCode(packed[k], packed[k + 1], packed[k + 2]);
+        if (!content.toLowerCase().includes(run.toLowerCase())) return { packed, run };
+      }
+    }
+    throw new Error('no chance run found');
+  }
+  const chanceForm = (packed) => (doc, page) => {
+    const stream = doc.context.stream(packed, { Type: 'XObject', Subtype: 'Form', BBox: [0, 0, 10, 10], Filter: 'FlateDecode' });
+    page.node.setXObject(PDFName.of('Fx0'), doc.context.register(stream));
+  };
+  const hasRun = (bytes, run) => Buffer.from(bytes).includes(Buffer.from(run, 'latin1'));
+
+  it('passes a Flate stream whose compressed bytes spell an active short value by chance (ADR-011)', async () => {
+    const { packed, run } = chanceRun();
+    const bytes = await makePdf(CLEAN, { extra: chanceForm(packed) });
+    expect(hasRun(bytes, run)).toBe(true);
+    expect(await verifyProtected(bytes, [entity('n1', 'NOMBRE_1', run)])).toEqual({ ok: true });
+  });
+
+  it('still fails the same short value in an uncompressed orphan object (ADR-011 control)', async () => {
+    const { packed, run } = chanceRun();
+    const clean = await makePdf(CLEAN, { extra: chanceForm(packed) });
+    const doc = await PDFDocument.load(clean, { updateMetadata: false });
+    doc.context.register(doc.context.obj({ Nota: PDFString.of(`x ${run} y`) }));
+    const orphan = await doc.save({ useObjectStreams: false });
+    expect(await verifyProtected(orphan, [entity('n1', 'NOMBRE_1', run)])).toEqual({ ok: false, reason: 'missed-value', where: 'object' });
   });
 
   it('finds a hidden value after binary junk with a stray parenthesis', async () => {

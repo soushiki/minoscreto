@@ -179,6 +179,29 @@ function revisions(bytes) {
   return count;
 }
 
+// Copia de `bytes` con los cuerpos codificados ya leídos decodificados cambiados por espacios (0x20), solo donde
+// empiezan como datos de un flujo (tras «stream» + salto de línea). Una sola pasada; nunca toca `bytes`.
+const KEYWORD = [...'stream'].map((c) => c.charCodeAt(0));
+function rawMinusBodies(bytes, bodies) {
+  const copy = new Uint8Array(bytes);
+  const byPrefix = new Map();
+  for (const body of bodies) {
+    if (!body.length) continue;
+    const key = body.subarray(0, 8).join(',');
+    byPrefix.set(key, [...(byPrefix.get(key) ?? []), body]);
+  }
+  const equalAt = (p, body) => body.every((b, j) => copy[p + j] === b);
+  for (let i = copy.indexOf(KEYWORD[0]); i !== -1; i = copy.indexOf(KEYWORD[0], i + 1)) {
+    if (!KEYWORD.every((b, j) => copy[i + j] === b) || copy[i - 1] === 0x64) continue;
+    let p = i + 6;
+    if (copy[p] === 13) p++;
+    if (copy[p++] !== 10) continue;
+    const hit = byPrefix.get(copy.subarray(p, p + 8).join(','))?.find((body) => equalAt(p, body));
+    if (hit) copy.fill(0x20, p, p + hit.length);
+  }
+  return copy;
+}
+
 async function checkProtected(bytes, entities) {
   let pages;
   let lines;
@@ -206,8 +229,9 @@ async function checkProtected(bytes, entities) {
   if (targets.length) {
     const overlap = 4 * Math.max(...targets.map((t) => t.length)) + 64;
     // Cada cadena y flujo alcanzable, decodificado, y además el archivo entero tal cual: un objeto suelto o
-    // una revisión vieja sin comprimir también cuentan, aunque la limpieza ya los haya quitado.
-    for (const blob of [...objects.strings, ...objects.streams, bytes]) {
+    // una revisión vieja sin comprimir también cuentan, aunque la limpieza ya los haya quitado. El paso crudo
+    // se salta los cuerpos codificados que ya se leyeron decodificados (ADR-011).
+    for (const blob of [...objects.strings, ...objects.streams, rawMinusBodies(bytes, objects.encodedBodies)]) {
       if (await blobLeaks(blob, targets, entities, overlap)) return fail('missed-value', 'object');
     }
   }

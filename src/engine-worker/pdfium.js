@@ -245,6 +245,7 @@ export function createPdfium({ fn, mem }) {
     const needles = checkNeedles(options);
     const restore = options.mode === 'restore'; // devolver valores en lugar de etiquetas (T13)
     let touched = false;
+    const detached = new Set(); // objetos que no son texto, fuera de la página mientras se aplica la redacción (ADR-010)
     const page = fn.FPDF_LoadPage(doc, index);
     if (!page) throw new PdfiumFault('page', String(index));
     let textPage = 0;
@@ -442,6 +443,13 @@ export function createPdfium({ fn, mem }) {
 
       const rect = slot(16);
       touched = true;
+      // ADR-010: la redacción solo debe quitar texto. ApplyRedactions también corta trazos (agujero blanco en una celda
+      // gris), así que todo objeto que no es texto sale de la página mientras se aplica y vuelve a su sitio después.
+      for (const obj of topLevel) {
+        if (fn.FPDFPageObj_GetType(obj) === OBJ_TEXT) continue;
+        if (!fn.FPDFPage_RemoveObject(page, obj)) throw new PdfiumFault('redact', `página ${index}`);
+        detached.add(obj);
+      }
       for (const plan of plans) {
         for (const [left, top, right, bottom] of plan.rects) {
           const annot = fn.FPDFPage_CreateAnnot(page, ANNOT_REDACT);
@@ -457,6 +465,16 @@ export function createPdfium({ fn, mem }) {
       const applied = slot(8);
       if (!fn.EPDFPage_ApplyRedactions(page, NULL, 0, applied)) throw new PdfiumFault('redact', `página ${index}`);
 
+      // Se devuelven en su orden original; el texto que sobrevive conserva sus punteros y su orden relativo, y el
+      // que la redacción borró entero simplemente se salta.
+      let slotAt = 0;
+      for (const obj of topLevel) {
+        if (detached.has(obj)) {
+          if (!fn.FPDFPage_InsertObjectAtIndex(page, obj, slotAt)) throw new PdfiumFault('redact', `página ${index}`);
+          detached.delete(obj); // ya es de la página otra vez
+          slotAt++;
+        } else if (fn.FPDFPage_GetObject(page, slotAt) === obj) slotAt++;
+      }
       const objectsNow = () => Array.from({ length: fn.FPDFPage_CountObjects(page) }, (_, i) => fn.FPDFPage_GetObject(page, i));
       // La redacción solo quita objetos o los recorta; si crea uno, un ancla podría ser otro objeto con la misma
       // dirección: se rechaza la página.
@@ -543,6 +561,7 @@ export function createPdfium({ fn, mem }) {
       }
     } catch (error) {
       if (touched) poisoned = true;
+      for (const obj of detached) fn.FPDFPageObj_Destroy(obj); // sin volver a la página: nadie más los libera
       throw error;
     } finally {
       for (const ptr of scratch) mem.free(ptr);

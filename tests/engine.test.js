@@ -239,6 +239,76 @@ describe('engine worker: editPage protect + save (T9, ADR-008)', () => {
     });
   });
 
+  it('R2c: the redaction removes text only: a filled cell under a value keeps its whole fill (ADR-010)', async () => {
+    const bytes = await onePage((page, font) => {
+      page.setSize(400, 800);
+      page.drawRectangle({ x: 50, y: 690, width: 300, height: 40, color: rgb(0.8, 0.8, 0.8) });
+      page.drawLine({ start: { x: 50, y: 680 }, end: { x: 350, y: 680 }, thickness: 1, color: rgb(0, 0, 0) });
+      page.drawText('Juan Perez 123', { x: 60, y: 705, size: 12, font, color: rgb(0, 0, 0) });
+      page.drawRectangle({ x: 200, y: 600, width: 50, height: 50, color: rgb(0.5, 0.5, 0.5) });
+    });
+    const { fn, mem } = runtime;
+    fn.FPDF_InitLibrary();
+    const slots = [0, 1, 2, 3].map(() => mem.alloc(4));
+    // Abre con PDFium crudo: tipo, segmentos y límites de cada objeto de la página, y la imagen renderizada.
+    const inspect = (pdf, probe) => {
+      const ptr = mem.alloc(pdf.length);
+      mem.writeBytes(ptr, pdf);
+      const doc = fn.FPDF_LoadMemDocument64(ptr, pdf.length, '');
+      const page = fn.FPDF_LoadPage(doc, 0);
+      try {
+        const objects = Array.from({ length: fn.FPDFPage_CountObjects(page) }, (_, i) => fn.FPDFPage_GetObject(page, i)).map((obj) => {
+          const type = fn.FPDFPageObj_GetType(obj);
+          fn.FPDFPageObj_GetBounds(obj, ...slots);
+          const bounds = slots.map((s) => Math.round(Number(mem.peek(s, 'f32'))));
+          return { type, segments: type === 2 ? fn.FPDFPath_CountSegments(obj) : 0, bounds: type === 2 ? bounds : null };
+        });
+        const tp = fn.FPDFText_LoadPage(page);
+        let text = '';
+        for (let i = 0, n = fn.FPDFText_CountChars(tp); i < n; i++) text += String.fromCodePoint(fn.FPDFText_GetUnicode(tp, i) || 63);
+        fn.FPDFText_ClosePage(tp);
+        const W = 400, H = 800;
+        const bmp = fn.FPDFBitmap_Create(W, H, 0);
+        fn.FPDFBitmap_FillRect(bmp, 0, 0, W, H, 0xffffffff);
+        fn.FPDF_RenderPageBitmap(bmp, page, 0, 0, W, H, 0, 0);
+        const buf = fn.FPDFBitmap_GetBuffer(bmp);
+        const stride = fn.FPDFBitmap_GetStride(bmp);
+        const px = (x, yPdf) => mem.readBytes(buf + BigInt((H - yPdf) * stride + x * 4), 4)[0];
+        const pixels = probe.map(([x, y]) => px(x, y));
+        fn.FPDFBitmap_Destroy(bmp);
+        return { objects, text, pixels };
+      } finally {
+        fn.FPDF_ClosePage(page);
+        fn.FPDF_CloseDocument(doc);
+        mem.free(ptr);
+      }
+    };
+    const probe = [[100, 692], [300, 716]]; // bajo la línea base de «Perez» y en otra parte de la celda
+    const before = inspect(bytes, probe);
+    const pdfium = createPdfium(runtime);
+    pdfium.open(bytes);
+    const { replaced } = pdfium.editPage(0, { mode: 'protect', needles: [{ value: 'Perez', put: '[PERSONA_1]' }] });
+    const out = pdfium.save();
+    pdfium.close();
+    expect(replaced).toBe(1);
+    const after = inspect(out, probe);
+    expect(after.text).not.toContain('Perez');
+    expect(after.text).toContain('[PERSONA_1]');
+    const paths = (r) => r.objects.filter((o) => o.type === 2);
+    expect(paths(after)).toEqual(paths(before)); // mismos trazos, segmentos y límites
+    expect(after.objects.map((o) => o.type).filter((t) => t !== 1)).toEqual(before.objects.map((o) => o.type).filter((t) => t !== 1));
+    // el cuadrado dibujado después del texto sigue después del texto
+    const types = after.objects.map((o) => o.type);
+    expect(types.lastIndexOf(2)).toBeGreaterThan(types.indexOf(1));
+    expect(types.indexOf(2)).toBeLessThan(types.indexOf(1));
+    // la celda conserva su gris donde estaba el valor (204), no queda un hueco blanco
+    expect(before.pixels[0]).toBeGreaterThan(200);
+    expect(after.pixels[0]).toBeGreaterThanOrEqual(201);
+    expect(after.pixels[0]).toBeLessThanOrEqual(207);
+    expect(after.pixels[1]).toBeGreaterThanOrEqual(201);
+    expect(after.pixels[1]).toBeLessThanOrEqual(207);
+  });
+
   it('R3a: the tag sits at the value\'s baseline and start, same height, brand colour, and extractable', async () => {
     const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
     const value = '73.215.884';
