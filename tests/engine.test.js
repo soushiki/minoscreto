@@ -182,9 +182,11 @@ describe('engine worker: editPage protect + save (T9, ADR-008)', () => {
     const { out, replaced } = protect(name);
     expect(replaced.reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
     const expected = (pages) => pages.map((lines) => lines.map((line) => tagged(line, pairs)));
+    // Una etiqueta pegada a la puntuación («[CEDULA_4]).») cuenta como separada: tagged() pone espacios a su alrededor.
+    const spaced = (pages) => pages.map((lines) => lines.map((line) => tokens(line.replace(/\[[A-Z]+_\d+\]/g, ' $& '))));
     const after = await pdfjsLines(out);
-    expect(after).toEqual(expected(await pdfjsLines(fixture(name))));
-    expect(await pdfjsLines(out, { raw: true })).toEqual(expected(await pdfjsLines(fixture(name), { raw: true })));
+    expect(spaced(after)).toEqual(expected(await pdfjsLines(fixture(name))));
+    expect(spaced(await pdfjsLines(out, { raw: true }))).toEqual(expected(await pdfjsLines(fixture(name), { raw: true })));
     const text = after.flat().join('\n');
     for (const [, value] of pairs) expect(text).not.toContain(value);
     // PDFium la reabre y ya no encuentra ningún valor (redacción real, no un rectángulo encima).
@@ -598,6 +600,31 @@ describe('engine worker: editPage protect + save (T9, ADR-008)', () => {
     expect(viaTf).toBeGreaterThan(44);
     expect(viaTf).toBeLessThan(50);
     expect(viaTm).toBeCloseTo(viaTf, 0);
+  });
+
+  it('a value followed by a comma: the tag stops before the comma', async () => {
+    const line = 'Llamar al 3001234567, o al 3007654321 hoy';
+    const pdf = await PDFDocument.create();
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const page = pdf.addPage([595, 842]);
+    page.drawText(line, { x: 50, y: 700, size: 12, font });
+    const pdfium = createPdfium(runtime);
+    pdfium.open(await pdf.save({ useObjectStreams: false }));
+    expect(pdfium.editPage(0, { mode: 'protect', needles: [{ value: '3001234567', put: '[TELEFONO_1]' }] })).toEqual({ replaced: 1 });
+    const out = pdfium.save();
+    pdfium.close();
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const doc = await pdfjs.getDocument({ data: out, verbosity: 0, isEvalSupported: false }).promise;
+    const items = (await (await doc.getPage(1)).getTextContent()).items.filter((item) => item.str !== '');
+    // pdf.js puede unir objetos: el borde derecho de la etiqueta es el inicio del texto que sigue («, o al …»), medido con la fuente.
+    const tagItem = items.find((item) => item.str.includes('[TELEFONO_1]'));
+    const rest = ', o al 3007654321 hoy';
+    const restItem = items.find((item) => item.str.endsWith(rest));
+    const restStart = restItem.transform[4] + restItem.width - font.widthOfTextAtSize(rest, 12);
+    const tagEnd = tagItem === restItem ? restStart : tagItem.transform[4] + tagItem.width;
+    const commaLeft = 50 + font.widthOfTextAtSize('Llamar al 3001234567', 12);
+    expect(tagEnd).toBeLessThanOrEqual(commaLeft + 0.5); // la coma dibuja ~1 pt después de su origen: la holgura puede usar ese hueco (antes: +6,5 pt)
+    expect(restStart).toBeCloseTo(commaLeft, 0);
   });
 
   it('a value with characters outside the basic plane is still found and replaced (𝐌)', async () => {

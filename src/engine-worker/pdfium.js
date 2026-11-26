@@ -18,7 +18,7 @@ const TAG_COLOR = [0, 0, 0, 255]; // negro (R3; usuario, 2026-11-24)
 const OLD_TAG_COLOR = [13, 92, 74, 255]; // verde de las etiquetas de prueba anteriores: al restaurar también pasa a negro
 const TAG_MIN_SCALE = 0.6; // la etiqueta se encoge para caber en el ancho del valor, hasta el 60 % (ADR-008)
 const COLLATERAL_ROUNDS = 8; // vueltas máximas para añadir texto vecino que la redacción también borraría
-const TAG_SLACK = 6; // puntos de holgura sobre el ancho del valor (si detrás viene un espacio no se usa: ver newTag)
+const TAG_SLACK = 6; // puntos de holgura sobre el ancho del valor (si detrás viene un espacio no se usa, y nunca pasa del inicio del carácter siguiente en la misma línea: ver newTag y slackAfter)
 const TAG = /^\[[\x21-\x5c\x5e-\x7e]{1,60}\]$/; // etiqueta [TIPO_n]: ASCII visible (Helvetica), sin «]» dentro
 const MAX_NEEDLES = 5000;
 const MAX_EDGE_NEEDLES = 500; // trozos de valores partidos entre folios, por página
@@ -330,6 +330,15 @@ export function createPdfium({ fn, mem }) {
       };
 
       const charBox = (i) => (fn.FPDFText_GetCharBox(textPage, i, d[0], d[1], d[2], d[3]) ? d.map(f64) : null); // left, right, bottom, top
+      const slackAfter = (end, [a, b]) => {
+        if (/\s/u.test(chars[end] ?? ' ')) return 0;
+        const last = end > 0 ? charBox(end - 1) : null;
+        const next = end < count ? charBox(end) : null;
+        if (!last || !next || !(a > 0 && Math.abs(b) <= 1e-6 * Math.abs(a))) return TAG_SLACK;
+        const overlap = Math.min(last[3], next[3]) - Math.max(last[2], next[2]);
+        if (overlap <= 0) return TAG_SLACK; // otra línea (una coma baja solo toca un poco la caja de la letra: no se exige la mitad)
+        return Math.min(TAG_SLACK, Math.max(0, next[0] - last[1]));
+      };
       const plans = planEdits(found, objOf, count, topLevel, index, (all) => { if (restore) swallowClipped(all); swallowCollateral(all); });
       // Todo lo que se va a volver a poner se mide antes de borrar: después ya no está.
       for (const plan of plans) {
@@ -343,7 +352,8 @@ export function createPdfium({ fn, mem }) {
             plan.seq.push({ put: needles[match.id].put, at: originOf(match.start), style: styleOf(first),
               width: extentAlong(styleOf(first).matrix, firstLine(rectsOf(match.start, match.end), index)),
               // Con un espacio detrás del valor, la etiqueta no pasa de su ancho: si no, pisa el espacio y pdf.js une la palabra siguiente.
-              slack: /\s/u.test(chars[match.end] ?? ' ') ? 0 : TAG_SLACK });
+              // Si detrás va otro carácter en la misma línea, la holgura no pasa del inicio de ese carácter (ver slackAfter).
+              slack: slackAfter(match.end, styleOf(first).matrix) });
           }
           at = match.end;
         }
