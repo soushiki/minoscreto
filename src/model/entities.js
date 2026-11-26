@@ -122,6 +122,14 @@ function detectAcrossBreaks(paragraphs, context) {
   return out;
 }
 
+// Una pista que es una parte entera de otro dato (un fin de teléfono bajo «Cédula») se oculta como alias de ese dato.
+function hostOfHint(list, h) {
+  const v = h.value.trim();
+  if (!v) return null;
+  const re = new RegExp(`(?<![\\p{L}\\p{N}])${v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'iu');
+  return list.find((e) => e.type !== h.type && e.type !== 'NOMBRE' && !e.weak && [e.value, ...e.aliases].some((s) => re.test(s))) || null;
+}
+
 export function buildEntities(paragraphs, { names = true, hints = [] } = {}) {
   const byKey = new Map();
   const list = [];
@@ -161,6 +169,12 @@ export function buildEntities(paragraphs, { names = true, hints = [] } = {}) {
       }
       if (existing.weak) { delete existing.weak; existing.enabled = TYPE_BY_ID[existing.type].on; }
       if (existing.type === h.type) existing.enabled = TYPE_BY_ID[h.type].on || existing.enabled;
+      continue;
+    }
+    const phoneHost = hostOfHint(list, h);
+    if (phoneHost) {
+      if (![phoneHost.value, ...phoneHost.aliases].some((v) => normKey(v) === key)) phoneHost.aliases.push(h.value);
+      byKey.set(key, phoneHost);
       continue;
     }
     const entity = createEntity(list, h.type, h.value);

@@ -40,6 +40,27 @@ describe('tablas: el encabezado de la columna da el tipo', () => {
     const ents = buildEntities([{ text: '52318904 PATRICIA NOVOA' }], { hints: [{ type: 'CEDULA', value: '52318904' }] });
     expect(ents.find((e) => e.type === 'CEDULA')).toMatchObject({ value: '52318904', enabled: true });
   });
+
+  const phoneText = [{ text: 'Teléfono: (57+601) 5439850, (57+601) 5439855' }];
+  const cedHints = (...vs) => vs.map((value) => ({ type: 'CEDULA', value }));
+
+  it('un fin de teléfono bajo «Cédula» es alias del teléfono, no una cédula', () => {
+    const ents = buildEntities(phoneText, { hints: cedHints('5439850', '5439855') });
+    expect(ents.filter((e) => e.type === 'CEDULA')).toEqual([]);
+    const tel = ents.filter((e) => e.type === 'TELEFONO');
+    expect(tel.length).toBeGreaterThan(0);
+    expect(tel.flatMap((e) => e.aliases)).toEqual(expect.arrayContaining(['5439850', '5439855']));
+  });
+
+  it('una pista que no está dentro de otro dato sigue siendo cédula', () => {
+    const ents = buildEntities(phoneText, { hints: cedHints('1234567') });
+    expect(ents.find((e) => e.type === 'CEDULA')).toMatchObject({ value: '1234567' });
+  });
+
+  it('una pista que solo coincide en parte de las cifras no se une al teléfono', () => {
+    const ents = buildEntities(phoneText, { hints: cedHints('5439') });
+    expect(ents.find((e) => e.type === 'CEDULA')).toMatchObject({ value: '5439' });
+  });
 });
 
 describe('bloques de firma', () => {
