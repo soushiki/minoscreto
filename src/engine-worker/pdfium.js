@@ -337,7 +337,8 @@ export function createPdfium({ fn, mem }) {
         if (!last || !next || !(a > 0 && Math.abs(b) <= 1e-6 * Math.abs(a))) return TAG_SLACK;
         const overlap = Math.min(last[3], next[3]) - Math.max(last[2], next[2]);
         if (overlap <= 0) return TAG_SLACK; // otra línea (una coma baja solo toca un poco la caja de la letra: no se exige la mitad)
-        return Math.min(TAG_SLACK, Math.max(0, next[0] - last[1]));
+        // Hasta donde empieza la letra siguiente: su origen (punto de escritura) o su tinta, lo que quede antes.
+        return Math.min(TAG_SLACK, Math.max(0, Math.min(next[0], originOf(end)[0]) - last[1]));
       };
       const plans = planEdits(found, objOf, count, topLevel, index, (all) => { if (restore) swallowClipped(all); swallowCollateral(all); });
       // Todo lo que se va a volver a poner se mide antes de borrar: después ya no está.
