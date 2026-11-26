@@ -2,7 +2,8 @@ import { TYPE_BY_ID } from './types.js';
 import { SCORES } from './scores.js';
 import { signatureNames } from './signatures.js';
 import { detect, COMPANY_SUFFIX_AT_END } from './detect.js';
-import { normKey } from './text.js';
+import { normKey, findOccurrences } from './text.js';
+import { COMMON_NOUNS, COMMON_LOWER_NAMES, AMBIGUOUS_FIRST_NAMES, CONNECTORS } from './lexicon.js';
 import { buildNameContext, withoutCue } from './properNouns.js';
 
 let sequence = 0;
@@ -226,7 +227,62 @@ export function buildEntities(paragraphs, { names = true, hints = [] } = {}) {
     }
   }
   const rest = dropNamesCoveredByOthers(list.filter((e) => !merged.has(e)));
+  addLoneMentions(rest, paragraphs, byKey);
   return mergeCueVariants(rest, byKey);
+}
+
+/**
+ * Una palabra suelta de un nombre completo («Mendoza declaró», tras «Ana María Mendoza») también es de esa persona.
+ * Las variantes se reemplazan en todo el documento, así que si la palabra es también una palabra común («Torres»,
+ * «torres»), o puede ser de dos personas, o no hay lista de comunes, no se une sola: queda como una etiqueta
+ * sin marcar para que el usuario decida. Solo cuenta si aparece suelta y con mayúscula.
+ */
+function addLoneMentions(rest, paragraphs, byKey) {
+  const owners = new Map();
+  for (const e of rest) {
+    if (e.type !== 'PERSONA' || normKey(e.value).split(' ').length < 2) continue;
+    for (const word of e.value.split(/\s+/)) {
+      const key = normKey(word.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, ''));
+      if (key.length < 4 || CONNECTORS.has(key)) continue;
+      if (!owners.has(key)) owners.set(key, new Set());
+      owners.get(key).add(e);
+    }
+  }
+  if (!owners.size) return;
+  const taken = new Set();
+  for (const e of rest) for (const v of [e.value, ...e.aliases]) taken.add(normKey(v));
+  const otherWords = new Set();
+  for (const e of rest) {
+    if (e.type !== 'PERSONA') for (const w of normKey(e.value).split(' ')) otherWords.add(w);
+  }
+  // Todas las agujas van como activas: aquí solo importa qué tramo es el más largo, no si el usuario lo marcó.
+  const needles = toNeedles(rest).map((n) => ({ ...n, enabled: true }));
+  for (const [key, who] of owners) {
+    if (taken.has(key) || otherWords.has(key)) continue;
+    let hitText = null;
+    for (const p of paragraphs) {
+      if (!p.text) continue;
+      for (const o of findOccurrences(p.text, [...needles, { id: '__lone', value: key, enabled: true }])) {
+        if (o.id !== '__lone' || !/\p{Lu}/u.test(p.text[o.start])) continue;
+        hitText = p.text.slice(o.start, o.end);
+        break;
+      }
+      if (hitText) break;
+    }
+    if (!hitText) continue;
+    const safe = COMMON_NOUNS.size > 0 && !COMMON_NOUNS.has(key) && !COMMON_LOWER_NAMES.has(key) && !AMBIGUOUS_FIRST_NAMES.has(key);
+    if (who.size === 1 && safe) {
+      const [owner] = who;
+      owner.aliases.push(hitText);
+      byKey.set(key, owner);
+    } else {
+      const it = createEntity(rest, 'PERSONA', hitText);
+      it.weak = true;
+      it.enabled = false;
+      rest.push(it);
+      byKey.set(key, it);
+    }
+  }
 }
 
 export const toNeedles = (entities) =>

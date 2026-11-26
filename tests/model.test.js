@@ -144,11 +144,17 @@ describe('operaciones de entidades (inmutables)', () => {
 
   it('avisa de partes de un nombre que quedan sueltas y encuentra búsquedas', async () => {
     const paragraphs = [{ text: 'Carlos Andrés Mendoza Ríos firma. Luego Mendoza paga y Carlos responde.' }];
-    const ents = buildEntities(paragraphs);
+    const ents = [createEntity([], 'PERSONA', 'Carlos Andrés Mendoza Ríos')];
     const analysis = analyze(paragraphs, ents, new Set());
     const suggestions = findSuggestions(paragraphs, ents, analysis);
     expect(suggestions.map((s) => s.token).sort()).toEqual(['Carlos', 'Mendoza']);
     expect(findHits(paragraphs, 'mendoza').list).toHaveLength(2);
+    // Con el reconocimiento completo y sin lista de comunes, las menciones sueltas quedan como etiquetas sin marcar
+    // (ADR-012 T3): ya son datos conocidos, así que no se repiten como aviso.
+    const built = buildEntities(paragraphs);
+    const builtAnalysis = analyze(paragraphs, built, new Set());
+    expect(findSuggestions(paragraphs, built, builtAnalysis)).toEqual([]);
+    expect(built.filter((e) => e.type === 'PERSONA' && !e.enabled).map((e) => e.value).sort()).toEqual(['Carlos', 'Mendoza']);
   });
 });
 
