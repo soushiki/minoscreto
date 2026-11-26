@@ -2,7 +2,8 @@
 // Usa todo el documento para decidir: una palabra con mayúscula que en otro lugar aparece en minúscula es común.
 import { fold } from './text.js';
 import {
-  STOP_WORDS, HONORIFICS, NAME_CUES, INSTITUTION_WORDS, COMMON_CAPS, SENTENCE_STARTERS, PLACES
+  STOP_WORDS, HONORIFICS, NAME_CUES, INSTITUTION_WORDS, COMMON_CAPS, SENTENCE_STARTERS, PLACES,
+  COMMON_NOUNS, FIRST_NAMES, SURNAMES, AMBIGUOUS_FIRST_NAMES
 } from './lexicon.js';
 
 // Dentro de un nombre: «Mirador del Río», «Finca La Esperanza». La «y» no: «Ecopetrol y la Hacienda» son dos nombres.
@@ -14,6 +15,8 @@ const ROMAN = /^[IVXLCDM]+$/;
 const NAMING_CUE = /(?:denominad[oa]s?|llamad[oa]s?|conocid[oa]s?\s+como|bajo\s+el\s+nombre\s+de|con\s+el\s+nombre\s+de|nombre\s+comercial)\s*[:«"“'‘]?\s*$/iu;
 // Lugares pequeños: «vereda El Retiro», «municipio de La Calera», «barrio San Diego».
 const PLACE_CUE = /(?:^|\s)(?:vereda|corregimiento|municipio|barrio|sector|localidad|inspecci[oó]n|caser[ií]o|poblaci[oó]n)\s+(?:de\s+|del\s+)?$/iu;
+// Etiqueta de formulario: «Nombre: …», «Afiliado: …».
+const NAME_LABEL = /(?:nombres?(?:\s+y\s+apellidos)?(?:\s+completos?)?|afiliad[oa]|cotizante|titular|beneficiari[oa]|paciente|trabajador[a]?|emplead[oa]|demandante|demandad[oa]|accionante|contratista|arrendatari[oa]|arrendador[a]?|deudor[a]?|codeudor[a]?)\s*:\s*$/iu;
 const OPEN_QUOTE = /[«"“'‘]\s*$/u;
 const CLOSE_QUOTE = /^\s*[»"”'’]/u;
 const NOT_A_NAME_ENDING = /(?:mente|ndo|ados?|adas?|idos?|idas?)$/u;
@@ -68,7 +71,9 @@ function capitalizedRuns(text, words) {
   return runs;
 }
 
-const generic = (f, ctx) => ctx.lower.has(f) || COMMON_CAPS.has(f) || STOP_WORDS.has(f) || SENTENCE_STARTERS.has(f) || HONORIFICS.has(f);
+// Palabra de la lista de comunes que no es también nombre ni apellido: sola no hace un nombre.
+const listedCommon = (f) => COMMON_NOUNS.has(f) && !FIRST_NAMES.has(f) && !SURNAMES.has(f);
+const generic = (f, ctx) => listedCommon(f) || INSTITUTION_WORDS.has(f) || ctx.lower.has(f) || COMMON_CAPS.has(f) || STOP_WORDS.has(f) || SENTENCE_STARTERS.has(f) || HONORIFICS.has(f);
 
 /**
  * Busca nombres propios en un párrafo, en lo que no reclamó otro tipo. Devuelve [{ start, end, type, weak }]:
@@ -95,8 +100,10 @@ export function detectProperNouns(text, isFree, ctx) {
       if (PLACES.has(w.f)) break;
       if (NAME_CUES.has(w.f) && !isUpperWord(w.w) && x < b) { cueInside = true; break; }
       const strip = isUpperWord(w.w) || ROMAN.test(w.w) || w.w.length < 2 || abbreviation(w) || CONNECTORS.has(w.f)
-        || STOP_WORDS.has(w.f) || HONORIFICS.has(w.f) || COMMON_CAPS.has(w.f)
-        || (x === a && initial && (SENTENCE_STARTERS.has(w.f) || ctx.lower.has(w.f)));
+        || STOP_WORDS.has(w.f) || HONORIFICS.has(w.f) || COMMON_CAPS.has(w.f) || COMMON_CAPS.has(w.f.replace(/-$/, ''))
+        || (x === a && initial && (SENTENCE_STARTERS.has(w.f) || ctx.lower.has(w.f)))
+        || (x === a && initial && w.w.length >= 4 && /[áéíó]$/u.test(w.w) && !FIRST_NAMES.has(w.f) && !SURNAMES.has(w.f))
+        || (w.w.endsWith('-') && x < b);
       if (!strip) break;
     }
     // El artículo con mayúscula a mitad de frase es parte del nombre: «vereda El Retiro», «municipio de La Calera».
@@ -119,17 +126,21 @@ export function detectProperNouns(text, isFree, ctx) {
     const before = text.slice(Math.max(0, start - 40), start);
     const cueBefore = (k) => k >= 0 && NAME_CUES.has(words[k].f) && /^[\s«"“'‘]*$/u.test(text.slice(words[k].e, words[k + 1].s));
     const cue = cueInside || cueBefore(x - 1) || cueBefore(a - 1) || NAMING_CUE.test(before) || NAMING_CUE.test(runBefore)
-      || PLACE_CUE.test(runBefore);
+      || PLACE_CUE.test(runBefore) || NAME_LABEL.test(before);
     const quoted = OPEN_QUOTE.test(before) && CLOSE_QUOTE.test(text.slice(end, end + 3));
     const named = content.filter((w) => !NAME_CUES.has(w.f));
     if (!named.length) return;
-    const distinctive = named.filter((w) => !generic(w.f, ctx));
+    const commonShape = (w) => (COMMON_NOUN_ENDING.test(w.f) || /(?:ica|icas|ico|icos)$/u.test(w.f)) && !FIRST_NAMES.has(w.f) && !SURNAMES.has(w.f);
+    const distinctive = named.filter((w) => !generic(w.f, ctx) || (named.length >= 2 && !(initial && x === a) && AMBIGUOUS_FIRST_NAMES.has(w.f)));
     if (!cue && !quoted && !distinctive.length) return;
     if ((cue || quoted) && named.every((w) => COMMON_CAPS.has(w.f) || STOP_WORDS.has(w.f))) return;
 
     // Una sola palabra con terminación de sustantivo común («Corporación», «Garantías», «Ponente») o de menos de tres letras
   // (ruido de OCR) sin pista no es un nombre.
     if (!cue && !quoted && named.length === 1 && (COMMON_NOUN_ENDING.test(named[0].f) || named[0].f.length < 3)) return;
+
+    // Todas las palabras distintivas con forma de sustantivo común, sin pista: no es un nombre.
+    if (!cue && !quoted && distinctive.length && distinctive.every(commonShape)) return;
 
     const mid = !(initial && x === a);
     const once = named.length === 1 && (ctx.caps.get(named[0].f) || 0) < 2;
