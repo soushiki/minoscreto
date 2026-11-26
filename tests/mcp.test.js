@@ -16,7 +16,7 @@ const noRealValue = (value) => { for (const v of REAL) expect(JSON.stringify(val
 
 describe('palabras comunes (ADR-012)', () => {
   it('core.mjs loads the shipped list at import', () => {
-    expect(COMMON_NOUNS.size).toBe(35840);
+    expect(COMMON_NOUNS.size).toBe(35843);
     expect(COMMON_NOUNS.has('empresa')).toBe(true);
   });
 });

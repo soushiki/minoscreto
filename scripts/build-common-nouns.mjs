@@ -93,7 +93,10 @@ function hunspellForms() {
 }
 
 const forms = hunspellForms();
+// Palabras de formularios que ni la lista de frecuencias ni Hunspell traen (encabezados y siglas del PDF de Katya).
+const EXTRA = ['sim', 'post', 'extranjería'];
 const keep = candidates().filter((w) => forms.has(w));
+for (const w of EXTRA) if (!keep.some((k) => fold(k) === fold(w))) keep.push(w);
 const header = [
   '# Source: FrequencyWords es_50k (Hermit Dave, https://github.com/hermitdave/FrequencyWords), CC BY-SA 4.0',
   '# Filtered with LibreOffice es_CO Hunspell dictionary (build time only)',
