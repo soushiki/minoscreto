@@ -9,7 +9,7 @@ import { FIRST_NAMES } from '../src/model/lexicon.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(root, 'src/model/data/common-nouns.txt');
-const LIMIT = 5000;
+const LIMIT = 50000;
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {

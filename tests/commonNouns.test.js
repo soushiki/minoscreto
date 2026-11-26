@@ -32,12 +32,12 @@ describe('parseCommonNouns / setCommonNouns', () => {
 });
 
 describe('the shipped list', () => {
-  it('parses to 4606 words with common words in and names out', () => {
+  it('parses to 35840 words with common words in and names out', () => {
     const words = parseCommonNouns(file);
-    expect(words).toHaveLength(4606);
-    expect(new Set(words).size).toBe(4606);
-    for (const w of ['empresa', 'importante', 'informacion']) expect(words).toContain(w);
-    for (const w of ['jack', 'londres']) expect(words).not.toContain(w);
+    expect(words).toHaveLength(35840);
+    expect(new Set(words).size).toBe(35840);
+    for (const w of ['empresa', 'importante', 'informacion', 'ciclo', 'ciudadania']) expect(words).toContain(w);
+    for (const w of ['jack', 'londres', 'mendoza', 'restrepo', 'jaime']) expect(words).not.toContain(w);
   });
 
   it('keeps the licence header', () => {
