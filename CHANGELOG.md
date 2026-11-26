@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.2 — 2026-11-26
+### Corregido
+- PDF con diseño: al borrar un dato ya no se abre un hueco blanco en las celdas grises de las tablas; solo se borra el texto.
+- PDF con diseño: la revisión final ya no rechaza por error un PDF limpio (un dato corto coincidía por azar con bytes comprimidos).
+- PDF con diseño: la etiqueta ya no tapa la letra siguiente (una coma, un paréntesis, otra palabra de la misma línea).
+- Detección: palabras comunes de formularios (Ciclo, Ciudadanía, Sim, Post…) ya no se marcan como nombres.
+- Detección: se protegen las menciones sueltas de un nombre ya encontrado, las fechas de nacimiento y las direcciones con «ED»; las etiquetas de formulario se unen con su valor.
+
 ## 0.5.1 — 2026-11-25
 ### Corregido
 - PDF con diseño en documentos con renglones muy juntos: al borrar un dato ya no se pierde texto del renglón vecino (antes se bajaba el PDF de texto).
